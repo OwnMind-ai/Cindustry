@@ -35,6 +35,7 @@ class Lexer(private val stream: CharStream) {
     fun next(): Token {
         val previous = last ?: throw ParserException("EOF")
 
+        this.skipWhitespaces()
         last = if (stream.ended()) null
                else parseToken()
         return previous

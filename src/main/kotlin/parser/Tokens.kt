@@ -36,6 +36,10 @@ data class PunctuationToken(
 data class OperatorToken(
     var operator: String
 ) : Token {
+    companion object{
+        val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=")
+    }
+
     fun getPriority(): Int{
         return when(operator){
             "=", "+=", "-=", "*=", "/=" -> 1

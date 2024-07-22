@@ -1,16 +1,4 @@
 void main(){
-    number x = 0;
-
-    while (true) {
-        // Comment
-        print(x++, @messageId);
-        wait(0.5);
-
-        if(x == 3 * 10 + 5){
-            break;
-        }
-    }
-}
-
-number foo(number a, number b){
+    any x = 1;
+    x += 1;
 }
