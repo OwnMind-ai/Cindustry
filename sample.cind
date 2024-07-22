@@ -1,0 +1,14 @@
+void main(){
+    int x = 0;
+
+    while (true) {
+        /*
+            You can also do:
+            x += 1;
+            print(x);
+            printFlash(@messageId);
+        */
+        print(x++, @messageId);
+        wait(0.5);
+    }
+}
