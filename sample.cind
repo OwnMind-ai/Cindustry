@@ -1,14 +1,16 @@
 void main(){
-    int x = 0;
+    number x = 0;
 
     while (true) {
-        /*
-            You can also do:
-            x += 1;
-            print(x);
-            printFlash(@messageId);
-        */
+        // Comment
         print(x++, @messageId);
         wait(0.5);
+
+        if(x == 3 * 10 + 5){
+            break;
+        }
     }
+}
+
+number foo(number a, number b){
 }

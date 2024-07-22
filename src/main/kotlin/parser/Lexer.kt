@@ -25,6 +25,13 @@ class Lexer(private val stream: CharStream) {
         return last ?: throw ParserException("EOF")
     }
 
+    inline fun <reified T: Token> strictNext(): T {
+        val token = next()
+        if (token !is T) throw ParserException("Unexpected token")
+
+        return token
+    }
+
     fun next(): Token {
         val previous = last ?: throw ParserException("EOF")
 
@@ -85,7 +92,7 @@ class Lexer(private val stream: CharStream) {
     private fun parseWord(): WordToken {
         val token = WordToken("")
 
-        while (stream.peek().isLetter() || stream.peek().isDigit())
+        while (stream.peek().isLetter() || stream.peek().isDigit() || stream.peek() == '_')
             token.word += stream.next().toString()
 
         return token
