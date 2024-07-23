@@ -17,7 +17,7 @@ class ParserTest {
                     print(x++, @message1);
                     wait(.5);
                     
-                    if(x == a + 10 - 10 + 23 - (12 + 124) - 5){
+                    if(x == a * 10 / 10 / 23 % 124 * 5){
                         break;
                     }
                 }
@@ -46,7 +46,7 @@ class ParserTest {
                     CallToken(WordToken("wait"), listOf(NumberToken("0.5"))),
 
                     IfToken(OperationToken(OperatorToken("=="), VariableToken(WordToken("x")),
-                        OperationToken(OperatorToken("-"), VariableToken(WordToken("a")), NumberToken("118"))),
+                        OperationToken(OperatorToken("*"), VariableToken(WordToken("a")), NumberToken((10.0 / 10.0 / 23.0 % 124.0 * 5).toString()))),
                         CodeBlockToken(listOf(
                             ReturnToken(WordToken("break"), null)
                         )), null

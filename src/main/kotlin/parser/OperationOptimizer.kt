@@ -41,8 +41,16 @@ object OperationOptimizer {
 
             if (target != null) {
                 var op = operator.operator
-                if (left.operator.operator == "-")
-                    op = if (op == "+") "-" else "+"
+                when (left.operator.operator) {
+                    "-" -> op = if (op == "+") "-" else "+"
+                    "/", "%" -> {
+                        if(op == "/" || op == "%") op = "*"
+                        else if(op == "*") {
+                            op = if(left.operator.operator == "/") "/-inv" else "%-inv"
+                            left.operator.operator = "*"
+                        }
+                    }
+                }
 
                 val value = calculate(target.first.number.toDouble(), op, right.number.toDouble()) as NumberToken
                 target.second.invoke(value)
@@ -135,6 +143,11 @@ object OperationOptimizer {
             "-" -> NumberToken((left - right).toOptimizedString())
             "*" -> NumberToken((left * right).toOptimizedString())
             "/" -> NumberToken((left / right).toOptimizedString())
+
+            // Used only during optimization time
+            "/-inv" -> NumberToken((right / left).toOptimizedString())
+            "%-inv" -> NumberToken((right % left).toOptimizedString())
+
             "%" -> NumberToken((left % right).toOptimizedString())
             ">>" -> NumberToken((left.toLong() shr right.toInt()).toString())
             "<<" -> NumberToken((left.toLong() shl right.toInt()).toString())

@@ -36,7 +36,7 @@ class Lexer(private val stream: CharStream) {
     fun next(): Token {
         val previous = last ?: throw ParserException("EOF")
 
-        this.skipWhitespaces()
+        skipUnimportantCharacters()
         last = if (stream.ended()) null
                else parseToken()
         return previous
@@ -45,8 +45,7 @@ class Lexer(private val stream: CharStream) {
     fun ended(): Boolean = stream.ended()
 
     private fun parseToken(): Token{
-        this.skipWhitespaces()
-        this.skipComments()
+        skipUnimportantCharacters()
 
         if (this.canParseNumber())
             return this.parseNumber()
@@ -108,6 +107,7 @@ class Lexer(private val stream: CharStream) {
         if (stream.peek() == '-') {
             isNegative = true
             stream.next()
+            skipUnimportantCharacters()
         }
 
         var intPart = ""
@@ -131,6 +131,12 @@ class Lexer(private val stream: CharStream) {
         return NumberToken((if (isNegative) "-" else "") + if (fractionPart == null) intPart else "$intPart.$fractionPart")
     }
 
+    private fun skipUnimportantCharacters() {
+        skipWhitespaces()
+        skipComments()
+        skipWhitespaces()
+    }
+
     private fun skipComments() {
         val peeked = stream.peek(2)
         val ending = when(peeked) {
@@ -147,8 +153,6 @@ class Lexer(private val stream: CharStream) {
 
         for (i in 0..ending.length)
             stream.next()
-
-        skipWhitespaces()
     }
 
     private fun skipWhitespaces() {
