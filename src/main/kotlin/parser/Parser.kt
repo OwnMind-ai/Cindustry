@@ -98,6 +98,14 @@ class Parser(private val lexer: Lexer) {
             return VariableToken(token)
         }
 
+        if (current is PunctuationToken && current.character == "("){
+            lexer.next()
+            val expression = parseExpression()
+            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ")" }
+
+            return expression
+        }
+
         if (current is ExecutableToken)
             return lexer.next() as ExecutableToken
 

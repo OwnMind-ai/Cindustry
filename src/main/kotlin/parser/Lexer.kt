@@ -13,6 +13,7 @@ class Lexer(private val stream: CharStream) {
         val OPERATOR_CHARS = OPERATORS.flatMap{ it.toList() }.map { it.toString() }.distinct().joinToString("")
 
         const val PUNCTUATIONS = ".,(){}[];"
+        const val PARSE_NUMBER_AS_NEGATIVE_AFTER = "([{;,"
     }
 
     private var last: Token?
@@ -100,7 +101,7 @@ class Lexer(private val stream: CharStream) {
     }
 
     private fun canParseNumber(): Boolean = stream.peek().isDigit() || (last !is WordToken && stream.peek() == '.')
-            || (last is PunctuationToken && stream.peek() == '-')
+            || (last is PunctuationToken && (last as PunctuationToken).character in PARSE_NUMBER_AS_NEGATIVE_AFTER && stream.peek() == '-')
 
     private fun parseNumber(): NumberToken {
         var isNegative = false
