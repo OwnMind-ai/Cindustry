@@ -5,7 +5,7 @@ class Lexer(private val stream: CharStream) {
         const val WHITESPACES = " \n\t\r"
         val OPERATORS = listOf(
             "+", "-", "*", "/", "%",
-            "=", "+=", "*=", "-=", "++", "--",
+            "=", "+=", "*=", "-=", "/=", "++", "--",
             ">", "<", ">=", "<=", "==", "===",
             "!", "&&", "||", "&", "|", ">>", "<<",
             "@")
@@ -100,8 +100,15 @@ class Lexer(private val stream: CharStream) {
     }
 
     private fun canParseNumber(): Boolean = stream.peek().isDigit() || (last !is WordToken && stream.peek() == '.')
+            || (last is PunctuationToken && stream.peek() == '-')
 
     private fun parseNumber(): NumberToken {
+        var isNegative = false
+        if (stream.peek() == '-') {
+            isNegative = true
+            stream.next()
+        }
+
         var intPart = ""
         var fractionPart: String? = null
 
@@ -120,7 +127,7 @@ class Lexer(private val stream: CharStream) {
         else if (intPart.isEmpty())
             intPart = "0"
 
-        return NumberToken(if (fractionPart == null) intPart else "$intPart.$fractionPart")
+        return NumberToken((if (isNegative) "-" else "") + if (fractionPart == null) intPart else "$intPart.$fractionPart")
     }
 
     private fun skipComments() {

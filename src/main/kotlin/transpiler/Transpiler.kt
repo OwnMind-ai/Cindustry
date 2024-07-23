@@ -41,21 +41,64 @@ class Transpiler(private val fileToken: FileToken) {
             val increment = token.operator.operator in listOf("++", "--")
             if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION || token.left !is VariableToken) && !increment) return
 
-            val variable: VariableToken = (if (token.left is VariableToken) token.left else token.right) as VariableToken
-            val value = if (increment) TypedExpression("1", Types.NUMBER) else transpileExpressionWithReference(token.right)
+            val variable = ((if (token.left is VariableToken) token.left else token.right) as VariableToken).name.word
+            val value = if (increment) TypedExpression("1", Types.NUMBER, false)
+                        else transpileExpressionWithReference(token.right, getVariable(variable).getTyped())
 
-            checkVariable(variable.name.word) { checkType(it.getTyped(), value) }
+            checkVariable(variable) { checkType(it.getTyped(), value) }
 
-            if (token.operator.operator == "=") {
+            if (value.complete){
+                mainStream.add(Instruction(value.value, nextId()))
+            } else if (token.operator.operator == "=") {
                 mainStream.add(Instruction("set ${(token.left as VariableToken).name.word} $value", nextId()))
             } else {
-                if (!value.compatible(TypedExpression("", Types.NUMBER)))
+                if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
                     throw TranspileException("Unable to perform string concatenation in this version")
 
-                mainStream.add(Instruction("op ${getOperationName(token.operator.operator)} ${variable.name.word} ${variable.name.word} ${value.value}", nextId()))
+                mainStream.add(Instruction("op ${getOperationName(token.operator.operator)} $variable $variable ${value.value}", nextId()))
             }
         } else
             throw IllegalArgumentException()
+    }
+
+    private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: TypedExpression? = null): TypedExpression {
+        if (value is NumberToken) return TypedExpression(value.number, Types.NUMBER, false)
+        if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
+        if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY, false)
+
+        if (value is VariableToken) {
+            var variable: TypedExpression? = null
+            checkVariable(value.name.word) { variable = it.getTyped() }
+            return variable!!
+        }
+
+        if (value is OperationToken){
+            return this.transpileOperationChain(value, dependedVariable)
+        }
+
+        throw IllegalArgumentException()
+    }
+
+    private fun transpileOperationChain(value: OperationToken, dependedVariable: TypedExpression?): TypedExpression {
+        if (value.isFlat()){
+            if (value.operator.operator in OperatorToken.ASSIGMENT_OPERATION) throw IllegalArgumentException()  //TODO
+
+            val operation = getOperationName(value.operator.operator)
+            val left = transpileExpressionWithReference(value.left)
+            val right = transpileExpressionWithReference(value.right)
+
+            checkType(left, right)
+
+            if (dependedVariable != null) {
+                checkType(dependedVariable, left)
+
+                //TODO some operators return bool
+                return TypedExpression("op ${getOperationName(operation)} ${dependedVariable.value} ${left.value} ${right.value}", left.type, true)
+            } else
+                throw UnsupportedOperationException()
+        }
+
+        throw UnsupportedOperationException()
     }
 
     private fun checkType(first: TypedExpression, second: TypedExpression) {
@@ -64,9 +107,12 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun checkVariable(name: String, ifFound: (VariableStack.VariableData) -> Unit = { }) {
-        ifFound(variableStack.stack.find { it.name == name } ?: throw TranspileException("Variable '$name' is not defined"))
+        ifFound(getVariable(name))
 
     }
+
+    private fun getVariable(name: String) =
+        variableStack.stack.find { it.name == name } ?: throw TranspileException("Variable '$name' is not defined")
 
     private fun transpileInitialization(token: InitializationToken) {
         val value = transpileExpressionWithReference(token.value)
@@ -75,14 +121,6 @@ class Transpiler(private val fileToken: FileToken) {
         checkType(variableStack.stack.last().getTyped(), value)
 
         mainStream.add(Instruction("set ${token.name.word} ${value.value}", nextId()))
-    }
-
-    private fun transpileExpressionWithReference(value: ExpressionToken): TypedExpression {
-        if (value is NumberToken) return TypedExpression(value.number, Types.NUMBER)
-        if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING)
-        if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY)
-
-        throw IllegalArgumentException()
     }
 
     private fun nextId(): Int{
@@ -95,8 +133,12 @@ class Transpiler(private val fileToken: FileToken) {
             "-", "-=", "--" -> "sub"
             "*", "*=" -> "mul"
             "/", "/=" -> "div"
+            "&&" -> "and"
+            "||", "|" -> "or"
+            "!=" -> "notEqual"
+            "!" -> throw UnsupportedOperationException()
 
-            else -> throw IllegalArgumentException(value)
+            else -> value
         }
     }
 

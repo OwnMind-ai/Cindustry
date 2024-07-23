@@ -38,6 +38,7 @@ data class OperatorToken(
 ) : Token {
     companion object{
         val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=")
+        val LOGIC_OPERATION: List<String> = listOf("||", "|", "&&", "&", ">", "<", "==", "===", ">=", "<=")
     }
 
     fun getPriority(): Int{
@@ -90,6 +91,10 @@ data class OperationToken(
         override fun toString(): String {
             return "EMPTY SIDE"
         }
+    }
+
+    fun isFlat(): Boolean{
+        return left !is OperationToken && left !is CallToken && right !is OperationToken && right !is CallToken
     }
 }
 

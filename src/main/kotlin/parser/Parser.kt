@@ -23,7 +23,8 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseExpression(): ExecutableToken {
-        return buildExpressionTree(tryParseExpression(), 0)
+        val token = buildExpressionTree(tryParseExpression(), 0)
+        return if (token is OperationToken) OperationOptimizer.optimize(token) else token
     }
 
     private fun buildExpressionTree(token: ExecutableToken, currentPriority: Int): ExecutableToken {
@@ -32,7 +33,6 @@ class Parser(private val lexer: Lexer) {
         if (token is ExpressionToken && next is OperatorToken) {
             if (next.getPriority() > currentPriority) {
                 val operator = lexer.strictNext<OperatorToken>()
-
 
                 val right = buildExpressionTree(tryParseExpression(), operator.getPriority())
                 if (right !is ExpressionToken)

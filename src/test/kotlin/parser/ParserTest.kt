@@ -4,6 +4,7 @@ import org.cindustry.parser.*
 import org.junit.jupiter.api.Test
 
 import org.junit.jupiter.api.Assertions.*
+import kotlin.math.abs
 
 class ParserTest {
 
@@ -13,12 +14,12 @@ class ParserTest {
             void main(){
                 number x = 0;
 
-                 for (x = 0; x < 4; x++) {
+                for (x = 0; x < 4; x++) {
                     // Comment
                     print(x++, @message1);
-                    wait(0.5);
+                    wait(.5);
                     
-                    if(x == 3 * 10 + 5){
+                    if(x == x - x + a * 10 / 10 / 10 * 23 / 12 / 124 * 5){
                         break;
                     }
                 }
@@ -47,7 +48,9 @@ class ParserTest {
                     CallToken(WordToken("wait"), listOf(NumberToken("0.5"))),
 
                     IfToken(OperationToken(OperatorToken("=="), VariableToken(WordToken("x")),
-                        OperationToken(OperatorToken("+"), OperationToken(OperatorToken("*"), NumberToken("3"), NumberToken("10")), NumberToken("5"))),
+                        OperationToken(OperatorToken("*"), VariableToken(WordToken("a")), NumberToken(
+                            (10 / 10 / 10.0 * 23 / 12.0 / 124.0 * 5).toString()
+                        ))),
                         CodeBlockToken(listOf(
                             ReturnToken(WordToken("break"), null)
                         )), null

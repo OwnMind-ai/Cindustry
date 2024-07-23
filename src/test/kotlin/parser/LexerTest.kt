@@ -9,7 +9,7 @@ class LexerTest {
 
     @Test
     fun simple() {
-        val lexer = Lexer(CharStream("word /* comment */ 1 1.24 .25 // comment\n + >= a. word(); \"abc\""))
+        val lexer = Lexer(CharStream("word /* comment */ 1 ,-.24 .25 // comment\n + >= a. word(); \"abc\""))
 
         var next = lexer.next()
         assertEquals(WordToken("word"), next)
@@ -18,7 +18,10 @@ class LexerTest {
         assertEquals(NumberToken("1"), next)
 
         next = lexer.next()
-        assertEquals(NumberToken("1.24"), next)
+        assertEquals(PunctuationToken(","), next)
+
+        next = lexer.next()
+        assertEquals(NumberToken("-0.24"), next)
 
         next = lexer.next()
         assertEquals(NumberToken("0.25"), next)
