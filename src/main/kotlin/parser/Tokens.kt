@@ -96,6 +96,7 @@ data class OperationToken(
     fun isFlat(): Boolean{
         return left !is OperationToken && left !is CallToken && right !is OperationToken && right !is CallToken
     }
+
 }
 
 data class CallToken(

@@ -1,6 +1,12 @@
 package org.cindustry.parser
 
 object OperationOptimizer {
+    /*TODO add optimizations:
+        1. X == true -> X ; X == false -> !X
+        2. x + x + x + x -> 4 * x ; same for -, * and /
+        3. a + a * 3 -> a * 4 ; a + (a * 3 + 4) -> a * 4 + 4
+     */
+
     fun optimize(token: OperationToken): ExpressionToken {
         var result: ExpressionToken = token
         optimizeDuplicates(token) { result = it }
@@ -9,6 +15,11 @@ object OperationOptimizer {
         return result
     }
 
+    // FIXME Doesn't optimizes "a + (a + 3) + 5",
+    //  because it is actually "(a + (a + 3)) + 5", so "+ 3" and "+ 5" too far apart.
+    //  Alternately, it is possible to optimize that during transpilation time,
+    //  since corresponding instructions are going to be sequentially placed,
+    //  but idk, I would try to optimize here first
     private fun optimizeChains(token: OperationToken, parent: OperationToken?, setter: (ExpressionToken) -> Unit) {
         val left = token.left
         val right = token.right

@@ -151,7 +151,7 @@ class Lexer(private val stream: CharStream) {
         while (!stream.ended() && stream.peek(ending.length) != ending)
             stream.next()
 
-        for (i in 0..ending.length)
+        for (i in 1..ending.length)
             stream.next()
     }
 
