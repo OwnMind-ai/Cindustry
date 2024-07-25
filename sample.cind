@@ -1,5 +1,5 @@
 void main(){
-    number a = 2;
-    number x = 1 + a;
-    x += a * 4 + a * 5;  //Check a++
+    number a = 3;
+    number x = a + 1;
+    x = a += 2;
 }

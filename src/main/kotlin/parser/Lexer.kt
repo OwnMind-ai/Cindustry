@@ -100,7 +100,8 @@ class Lexer(private val stream: CharStream) {
     }
 
     private fun canParseNumber(): Boolean = stream.peek().isDigit() || (last !is WordToken && stream.peek() == '.')
-            || (last is PunctuationToken && (last as PunctuationToken).character in PARSE_NUMBER_AS_NEGATIVE_AFTER && stream.peek() == '-')
+            || (last is PunctuationToken && (last as PunctuationToken).character in PARSE_NUMBER_AS_NEGATIVE_AFTER
+                && stream.peek() == '-' && stream.peek(2)[1] != '-')
 
     private fun parseNumber(): NumberToken {
         var isNegative = false

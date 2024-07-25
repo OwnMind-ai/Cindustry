@@ -38,7 +38,12 @@ data class OperatorToken(
 ) : Token {
     companion object{
         val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=")
+        val ASSIGMENT_INCREMENT_OPERATION: MutableList<String> = mutableListOf("++", "--")
         val LOGIC_OPERATION: List<String> = listOf("||", "|", "&&", "&", ">", "<", "==", "===", ">=", "<=")
+
+        init {
+            ASSIGMENT_INCREMENT_OPERATION.addAll(ASSIGMENT_OPERATION)
+        }
     }
 
     fun getPriority(): Int{
