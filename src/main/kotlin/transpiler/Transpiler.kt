@@ -34,34 +34,33 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun transpileExpression(token: ExpressionToken) {
-        if (token is NumberToken && token is StringToken) return
+        if (token is NumberToken || token is StringToken || token is BooleanToken) return
 
         if (token is OperationToken){
             // We don't care if it is ++x or x++, because we don't use return value
             val increment = token.operator.operator in listOf("++", "--")
             val assigmentComposition = token.operator.operator != "=" && token.operator.operator in OperatorToken.ASSIGMENT_OPERATION
-            if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION || token.left !is VariableToken) && !increment) return
+            if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION || token.left !is NamedToken) && !increment) throw TranspileException("Invalid expression")
 
             // TypedToken for buffer operations
-            val variableToken = (if (token.left is VariableToken || token.left is TypedToken) token.left else token.right)
-            val variable = if (variableToken is VariableToken) variableToken.name.word else (variableToken as TypedToken).value.value
-            val variableTyped = if (variableToken is VariableToken) getVariable(variable).getTyped() else (variableToken as TypedToken).value
+            val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
+            val variableTyped = variable.getTyped()
 
             val value = if (increment) TypedExpression("1", Types.NUMBER, false)
                         else transpileExpressionWithReference(token.right, if (assigmentComposition) null else variableTyped)
 
-            if (variableToken is VariableToken)
-                checkVariable(variable) { checkType(it.getTyped(), value) }
+            if (variable is VariableToken)
+                checkVariable(variable.getName()) { checkType(it.getTyped(), value) }
 
             if (value.complete){
                 writeInstruction(value)
             } else if (token.operator.operator == "=") {
-                writeInstruction("set ${(token.left as VariableToken).name.word} #", value)
+                writeInstruction("set ${variable.getName()} #", value)
             } else {
                 if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
                     throw TranspileException("Unable to perform string concatenation in this version")
 
-                writeInstruction("op ${getOperationName(token.operator.operator)} $variable $variable #", value)
+                writeInstruction("op ${getOperationName(token.operator.operator)} ${variable.getName()} ${variable.getName()} #", value)
             }
         } else
             throw IllegalArgumentException()
@@ -96,12 +95,12 @@ class Transpiler(private val fileToken: FileToken) {
             val incremental = value.operator.operator in listOf("++", "--")
 
             if (value.operator.operator in OperatorToken.ASSIGMENT_OPERATION || incremental && value.right is VariableToken){
-                val variableToken = if (incremental) value.right as VariableToken else value.left as VariableToken
+                val variable = (if (incremental) value.right else value.left) as NamedToken
                 val valueToken = if (incremental) NumberToken("1") else value.right
 
                 if (shortAssigmentPossible) {
                     transpileExpression(value)
-                    return getVariable(variableToken.name.word).getTyped()
+                    return variable.getTyped()
                 } else {
                     //TODO add warning maybe?
                     // If user actually invoked this (shortAssigmentPossible is false) inefficient black magic,
@@ -109,13 +108,13 @@ class Transpiler(private val fileToken: FileToken) {
                     // By the way, there are A LOT of room of improvement (specifically in this code block),
                     // however it is really rare case,
                     // so why bother considering how toy this language is
-                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), getVariable(variableToken.name.word).getTyped().type, false)
+                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), variable.getTyped().type, false)
                     val valueTokenResult = this.transpileExpressionWithReference(valueToken)
 
-                    writeInstruction("op ${getOperationName(value.operator.operator)} ${operationBuffer.value} ${variableToken.name.word} #", valueTokenResult)
+                    writeInstruction("op ${getOperationName(value.operator.operator)} ${operationBuffer.value} ${variable.getName()} #", valueTokenResult)
 
 //                    operationBuffer.addAfter = "set ${variableToken.name.word} ${operationBuffer.value}"
-                    writeInstruction("set ${variableToken.name.word} ${operationBuffer.value}")
+                    writeInstruction("set ${variable.getName()} ${operationBuffer.value}")
 
                     return operationBuffer
                 }
@@ -133,7 +132,7 @@ class Transpiler(private val fileToken: FileToken) {
                 }
             }
 
-            val operation = getOperationName(value.operator.operator)
+            val operation = value.operator.operator
             val left = transpileExpressionWithReference(value.left)
             val right = transpileExpressionWithReference(value.right)
 
@@ -152,12 +151,16 @@ class Transpiler(private val fileToken: FileToken) {
                     null, shortAssigment
                 )
 
-            return transpileFlatOperation(
-                left, right, dependedVariable,
-                getOperationName(value.operator.operator),
-                OperationToken(value.operator, left.toToken(), right.toToken()),
-                buffer
-            )
+            val operationToken = OperationToken(value.operator, left.toToken(), right.toToken())
+            return if (value.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION) {
+                transpileOperationChain(operationToken, createBuffer(operationToken), left)
+            } else {
+                transpileFlatOperation(
+                    left, right, dependedVariable, value.operator.operator,
+                    operationToken,
+                    buffer
+                )
+            }
         }
     }
 
@@ -170,7 +173,7 @@ class Transpiler(private val fileToken: FileToken) {
         }
         return !(left is OperationToken && left.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION
                 && leftGetter.invoke(left) == rightGetter.invoke(right))
-                && !(!finish && isShortAssigmentPossible(right, left, true))
+                && !(!finish && !isShortAssigmentPossible(right, left, true))
     }
 
     private fun transpileFlatOperation(left: TypedExpression, right: TypedExpression, dependedVariable: TypedExpression?,
@@ -190,9 +193,12 @@ class Transpiler(private val fileToken: FileToken) {
             )
         } else {
             val result = transpileOperationChain(value, buffer, buffer)
-            writeInstruction(result)
-
-            return buffer
+            if (result.complete) {
+                writeInstruction(result)
+                return buffer
+            } else {   // For '=' operator
+                return result
+            }
         }
     }
 
@@ -290,7 +296,16 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    data class TypedToken(val value: TypedExpression) : ExpressionToken
+    data class TypedToken(val value: TypedExpression) : ExpressionToken, NamedToken {
+        override fun getName(): String {
+            return value.value
+        }
+    }
+
+    private fun NamedToken.getTyped(): TypedExpression{
+        return if (this is TypedToken) this.value
+               else getVariable(this.getName()).getTyped()
+    }
 
     private fun TypedExpression.toToken(): TypedToken {
         return TypedToken(this)

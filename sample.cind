@@ -1,5 +1,7 @@
 void main(){
     number a = 3;
-    number x = a + 1;
-    x = a += 2;
+    number x = 1;
+    number y = 1;
+    number z = 1;
+    x = (a = 5);  // Breaks, FIX
 }

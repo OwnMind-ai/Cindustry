@@ -109,9 +109,17 @@ data class CallToken(
     var parameters: List<ExpressionToken>
 ) : ExpressionToken
 
+interface NamedToken{
+    fun getName(): String
+}
+
 data class VariableToken(
     var name: WordToken
-) : ExpressionToken
+) : ExpressionToken, NamedToken {
+    override fun getName(): String {
+        return name.word
+    }
+}
 
 data class IfToken(
     var condition: ExpressionToken,
