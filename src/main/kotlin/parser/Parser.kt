@@ -19,7 +19,8 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseCodeBlock(): CodeBlockToken {
-        return CodeBlockToken(delimiter("{", ";", "}", this::parseExpression, separatorIgnorePredicate = { it is BlockToken}))
+        return CodeBlockToken(delimiter("{", ";", "}", this::parseExpression,
+            separatorIgnorePredicate = { it is BlockToken && (it !is WhileToken || !it.isDoWhile)}))
     }
 
     private fun parseExpression(): ExecutableToken {
@@ -31,6 +32,9 @@ class Parser(private val lexer: Lexer) {
         val next = lexer.peek()
 
         if (token is ExpressionToken && next is OperatorToken) {
+            if ((next.operator == "++" || next.operator == "--") && token is VariableToken)
+                return buildExpressionTree(OperationToken(lexer.strictNext(), token, OperationToken.EmptySide()), 0)
+
             if (next.getPriority() >= currentPriority) {
                 val operator = lexer.strictNext<OperatorToken>()
 
@@ -39,8 +43,7 @@ class Parser(private val lexer: Lexer) {
                     throw ParserException("Invalid token, expression was expected")
 
                 return buildExpressionTree(OperationToken(operator, token, right), currentPriority)
-            } else if (next.operator == "++" || next.operator == "--")
-                return OperationToken(lexer.strictNext(), token, OperationToken.EmptySide())
+            }
         }
 
         return token
@@ -117,6 +120,7 @@ class Parser(private val lexer: Lexer) {
 
         if (token.word == "for") return parseFor()
         if (token.word == "while") return parseWhile()
+        if (token.word == "do") return parseDoWhile()
         if (token.word == "if") return parseIf()
 
         if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == "(")
@@ -152,7 +156,21 @@ class Parser(private val lexer: Lexer) {
         if (condition !is ExpressionToken)
             throw ParserException("Invalid token, expression was expected")
 
-        return WhileToken(condition, parseCodeBlock())
+        return WhileToken(condition, parseCodeBlock(), false)
+    }
+
+    private fun parseDoWhile(): WhileToken {
+        val doBlock = parseCodeBlock()
+
+        lexer.strictNext<WordToken>().assert { it is WordToken && it.word == "while" }
+        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == "(" }
+        val condition = parseExpression()
+        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == ")" }
+
+        if (condition !is ExpressionToken)
+            throw ParserException("Invalid token, expression was expected")
+
+        return WhileToken(condition, doBlock, true)
     }
 
     private fun parseFor(): ForToken {

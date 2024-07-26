@@ -1,5 +1,5 @@
 void main(){
     number a = 3;
     any x = 1;
-    x = ++a * a;  // Breaks, FIX
+    x = ++a * 4;  // Breaks, FIX
 }

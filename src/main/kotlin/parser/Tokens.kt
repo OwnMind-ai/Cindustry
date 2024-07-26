@@ -130,7 +130,8 @@ data class IfToken(
 
 data class WhileToken(
     var condition: ExpressionToken,
-    var doBlock: CodeBlockToken
+    var doBlock: CodeBlockToken,
+    var isDoWhile: Boolean
 ) : ExecutableToken, BlockToken
 
 data class ForToken(
