@@ -120,7 +120,7 @@ object OperationOptimizer {
         } else if (right is NumberToken && right.number == "0" && operator in listOf("+", "-")) {
             setter.invoke(left)
             return true
-        } else if (left is NumberToken && left.number == "0" && operator in listOf("+", "-")) {
+        } else if (left is NumberToken && left.number == "0" && operator == "+") {
             setter.invoke(right)
             return true
         }

@@ -10,14 +10,15 @@ class ParserTest {
     fun parse() {
         val file = """
             void main(){
-                number x = 0;
+                number x = a++ * 4;
 
                 for (x = 0; x < 4; x++) {
                     // Comment
                     print(x++, @message1);
                     wait(.5);
                     
-                    if(x == a * 10 / 10 / 23 % 124 * 5){
+                    x = a = 5;
+                    if(x == x + a * 10 + 5){
                         break;
                     }
                 }
@@ -31,7 +32,8 @@ class ParserTest {
 
         assertEquals(FileToken(listOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
-                InitializationToken(WordToken("number"), WordToken("x"), NumberToken("0")),
+                InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
+                    OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
                 ForToken(
                     OperationToken(OperatorToken("="), VariableToken(WordToken("x")), NumberToken("0")),
                     OperationToken(OperatorToken("<"), VariableToken(WordToken("x")), NumberToken("4")),
@@ -44,9 +46,14 @@ class ParserTest {
                     )),
 
                     CallToken(WordToken("wait"), listOf(NumberToken("0.5"))),
+                    OperationToken(OperatorToken("="), VariableToken(WordToken("x")),
+                        OperationToken(OperatorToken("="), VariableToken(WordToken("a")), NumberToken("5"))),
 
                     IfToken(OperationToken(OperatorToken("=="), VariableToken(WordToken("x")),
-                        OperationToken(OperatorToken("*"), VariableToken(WordToken("a")), NumberToken((10.0 / 10.0 / 23.0 % 124.0 * 5).toString()))),
+                        OperationToken(OperatorToken("+"), VariableToken(WordToken("x")),
+                            OperationToken(OperatorToken("+"),
+                                OperationToken(OperatorToken("*"), VariableToken(WordToken("a")), NumberToken("10")),
+                                NumberToken("5")))),
                         CodeBlockToken(listOf(
                             ReturnToken(WordToken("break"), null)
                         )), null

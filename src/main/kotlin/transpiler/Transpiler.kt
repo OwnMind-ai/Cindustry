@@ -165,13 +165,16 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun isShortAssigmentPossible(left: ExpressionToken, right: ExpressionToken, finish: Boolean = false): Boolean {
+        val operations = OperatorToken.ASSIGMENT_INCREMENT_OPERATION.toMutableList()
+        operations.remove("=")
+
         val leftGetter: (OperationToken) -> VariableToken = { (if (it.left is VariableToken) it.left else it.right) as VariableToken }
         val rightGetter: (ExpressionToken) -> VariableToken? = {
             if (it is VariableToken) it else
-                if (it is OperationToken && it.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION) leftGetter(it)
+                if (it is OperationToken && it.operator.operator in operations) leftGetter(it)
                 else null
         }
-        return !(left is OperationToken && left.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION
+        return !(left is OperationToken && left.operator.operator in operations
                 && leftGetter.invoke(left) == rightGetter.invoke(right))
                 && !(!finish && !isShortAssigmentPossible(right, left, true))
     }
