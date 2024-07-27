@@ -5,6 +5,7 @@ object OperationOptimizer {
         1. X == true -> X ; X == false -> !X
         2. x + x + x + x -> 4 * x ; same for -, * and /
         3. a + a * 3 -> a * 4 ; a + (a * 3 + 4) -> a * 4 + 4
+        4. !(x == y) -> x != y
      */
 
     fun optimize(token: OperationToken): ExpressionToken {

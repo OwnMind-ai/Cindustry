@@ -1,14 +1,9 @@
 void main(){
-    number a = 0;
+    bool a = false;
 
-    for(number i = 0; i < 5; i++) {
-        number x = i;
-        for (number j = 0; i < j; j++){
-            x *= x ;
-        }
-
-        a += x;
+    while(!a){
+        a = true;
     }
 
-    number x = a;
+    any x = a;
 }

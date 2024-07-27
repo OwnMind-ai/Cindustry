@@ -19,8 +19,15 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseCodeBlock(): CodeBlockToken {
-        return CodeBlockToken(delimiter("{", ";", "}", this::parseExpression,
-            separatorIgnorePredicate = { it is BlockToken && (it !is WhileToken || !it.isDoWhile)}))
+        val token = CodeBlockToken(
+            delimiter("{", ";", "}", this::parseExpression,
+                separatorIgnorePredicate = { it is BlockToken && (it !is WhileToken || !it.isDoWhile) })
+        )
+
+        if (token.statements.withIndex().any { it.value is ReturnToken && it.index < token.statements.size - 1})
+            throw ParserException("Unreachable statement")
+
+        return token
     }
 
     private fun parseExpression(): ExecutableToken {

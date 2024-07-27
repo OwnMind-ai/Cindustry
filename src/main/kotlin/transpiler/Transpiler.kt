@@ -167,6 +167,12 @@ class Transpiler(private val fileToken: FileToken) {
 
                     return operationBuffer
                 }
+            } else if (value.operator.operator == "!"){
+                return transpileFlatOperation(
+                    TypedExpression("1", Types.BOOL, false),
+                    transpileExpressionWithReference(value.right),
+                    dependedVariable, value.operator.operator, value, buffer
+                )
             }
 
             val operation = value.operator.operator
@@ -300,14 +306,13 @@ class Transpiler(private val fileToken: FileToken) {
             "%", "%=" -> "mod"
             "&&" -> "and"
             "||", "|" -> "or"
-            "!=" -> "notEqual"
+            "!=", "!" -> "notEqual"
             "==" -> "equal"
             "===" -> "strictEqual"
             ">" -> "greaterThan"
             ">=" -> "greaterThanEq"
             "<" -> "lessThan"
             "<=" -> "lessThanEq"
-            "!" -> throw UnsupportedOperationException()
 
             else -> value
         }
