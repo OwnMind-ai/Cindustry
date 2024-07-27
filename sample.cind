@@ -1,9 +1,23 @@
 void main(){
-    bool a = false;
+    // Fizz Buzz (kinda)
+    number n = 10;
+    number o = 0;
 
-    while(!a){
-        a = true;
+    for(number i = 0; i < n; i++){
+        if(i % 3 == 0 && i % 5 == 0){
+            o += 1000000;
+        } else {
+            if (i % 3 == 0) {
+                o += 10000;
+            } else {
+                if (i % 5 == 0){
+                    o += 100;
+                } else {
+                    o += i;
+                }
+            }
+        }
     }
 
-    any x = a;
+    any output = o;
 }

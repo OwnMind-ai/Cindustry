@@ -15,6 +15,13 @@ class Transpiler(private val fileToken: FileToken) {
         variableStack.add(main.codeBlock)
         main.codeBlock.statements.forEach(this::transpileExecutableToken)
 
+        val firstId = mainStream[0].id
+        // Allows jumps for if statements to transpile properly if there is no following instruction
+        mainStream.filter { it is JumpInstruction && it.jumpToId == mainStream.size }.forEach {
+            // Redirects jump to the start, as if the program ended after jump firing
+            (it as JumpInstruction).jumpToId = firstId
+        }
+
         return mainStream.joinToString("\n") { it.getCode(::getInstructionIndex) }
     }
 
@@ -32,7 +39,39 @@ class Transpiler(private val fileToken: FileToken) {
             is ExpressionToken -> transpileExpression(token)
             is WhileToken -> transpileWhile(token)
             is ForToken -> transpileFor(token)
+            is IfToken -> transpileIf(token)
             else -> throw IllegalArgumentException()
+        }
+    }
+
+    private fun transpileIf(token: IfToken) {
+        // TODO change to something like token.condition.negate(), idk
+        val conditionToken = OperationOptimizer.optimize(
+                OperationToken(OperatorToken("!"), OperationToken.EmptySide(), token.condition))
+
+        val condition = transpileExpressionWithReference(conditionToken, DependedValue.createJump()).value
+        val conditionJump = JumpInstruction(if (condition == "true") "always" else condition, -1, nextId())
+        mainStream.add(conditionJump)
+
+        variableStack.add(token.doBlock)
+        token.doBlock.statements.forEach(this::transpileExecutableToken)
+        variableStack.remove(token.doBlock)
+
+        // We assume there is code after if-statement (it could be else-block too) and loosely referencing it
+        // (if there is none, transpiler will redirect the reference to the start of the program,
+        // as if it was ended)
+        conditionJump.jumpToId = mainStream.size  //TODO fix, it is unsafe
+
+        if (token.elseBlock != null){
+            val ifEndedJump = JumpInstruction("always", -1, nextId())
+            mainStream.add(ifEndedJump)
+            conditionJump.jumpToId++
+
+            variableStack.add(token.elseBlock!!)
+            token.elseBlock!!.statements.forEach(this::transpileExecutableToken)
+            variableStack.remove(token.elseBlock!!)
+
+            ifEndedJump.jumpToId = mainStream.size
         }
     }
 
@@ -53,7 +92,7 @@ class Transpiler(private val fileToken: FileToken) {
         if (!token.isDoWhile) {
             jumpToConditionInstruction = JumpInstruction.createAlways(-1, nextId())
             this.mainStream.add(jumpToConditionInstruction)
-            startPointer++
+             startPointer++
         }
 
         variableStack.add(token.doBlock)
@@ -106,6 +145,7 @@ class Transpiler(private val fileToken: FileToken) {
 
     private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: DependedValue = DependedValue(null)): TypedExpression {
         if (value is TypedToken) return value.value
+        if (value is OperationToken.EmptySide) return TypedExpression("EMPTY", Types.ANY, false)
         if (value is NumberToken) return TypedExpression(value.number, Types.NUMBER, false)
         if (value is BooleanToken) return TypedExpression(if (value.value) "1" else "0", Types.BOOL, false)
         if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
@@ -206,14 +246,20 @@ class Transpiler(private val fileToken: FileToken) {
                 )
 
             val operationToken = OperationToken(value.operator, left.toToken(), right.toToken())
-            return if (value.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION) {
-                transpileOperationChain(operationToken, createBuffer(operationToken), DependedValue(left))
-            } else {
-                transpileFlatOperation(
-                    left, right, dependedVariable, value.operator.operator,
-                    operationToken,
-                    buffer
-                )
+            return when (value.operator.operator) {
+                in OperatorToken.ASSIGMENT_INCREMENT_OPERATION -> {
+                    transpileOperationChain(operationToken, createBuffer(operationToken), DependedValue(left))
+                }
+                "!" -> {
+                    transpileOperationChain(operationToken, buffer, dependedVariable)
+                }
+                else -> {
+                    transpileFlatOperation(
+                        left, right, dependedVariable, value.operator.operator,
+                        operationToken,
+                        buffer
+                    )
+                }
             }
         }
     }
@@ -358,6 +404,9 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun writeInstruction(expression: TypedExpression){
+        if (expression.value == "EMPTY")
+            throw IllegalArgumentException("Empty side used")
+
         mainStream.add(Instruction(expression.value, nextId()))
 
         if (expression.addAfter != null)
@@ -366,6 +415,9 @@ class Transpiler(private val fileToken: FileToken) {
 
     // Use # to indicate
     private fun writeInstruction(code: String, vararg elements: TypedExpression){
+        if (elements.any { it.value == "EMPTY" })
+            throw IllegalArgumentException("Empty side used")
+
         val parts = code.split("#").toMutableList()
 
         if (elements.isNotEmpty())
