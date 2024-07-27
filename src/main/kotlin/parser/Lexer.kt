@@ -154,6 +154,8 @@ class Lexer(private val stream: CharStream) {
 
         for (i in 1..ending.length)
             stream.next()
+
+        skipComments()   // Skips sequential comments if exist
     }
 
     private fun skipWhitespaces() {

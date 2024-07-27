@@ -262,6 +262,9 @@ class Transpiler(private val fileToken: FileToken) {
         variableStack.stack.find { it.name == name } ?: throw TranspileException("Variable '$name' is not defined")
 
     private fun transpileInitialization(token: InitializationToken) {
+        if(variableStack.stack.any{ it.name == token.name.word })
+            throw TranspileException("Variable '${token.name.word}' already exists in this scope")
+
         variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word, variableStack.blockStack.last().block))
         val value = transpileExpressionWithReference(token.value, DependedValue(getVariable(token.name.word).getTyped()))
 
