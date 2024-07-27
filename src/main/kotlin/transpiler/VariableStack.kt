@@ -22,6 +22,8 @@ class VariableStack {
 
         if (removed == null || removed.block != block)
             throw IllegalStateException()  // TODO Change to InternalParserException
+
+        stack.removeIf { it.codeBlock == removed.block }
     }
 
     data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken){

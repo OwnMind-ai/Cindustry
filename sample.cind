@@ -1,9 +1,14 @@
 void main(){
-    number a = 100;
+    number a = 0;
 
-    do {
-        a = a / 2 - a / 3;
-    } while (a % 2 == 0);
+    for(number i = 0; i < 5; i++) {
+        number x = i;
+        for (number j = 0; i < j; j++){
+            x *= x ;
+        }
+
+        a += x;
+    }
 
     number x = a;
 }

@@ -31,8 +31,19 @@ class Transpiler(private val fileToken: FileToken) {
             is InitializationToken -> transpileInitialization(token)
             is ExpressionToken -> transpileExpression(token)
             is WhileToken -> transpileWhile(token)
+            is ForToken -> transpileFor(token)
             else -> throw IllegalArgumentException()
         }
+    }
+
+    private fun transpileFor(token: ForToken) {
+        transpileExecutableToken(token.initialization)
+
+        val body = token.doBlock.statements.toMutableList()
+        body.add(token.after)
+
+        val whileToken = WhileToken(token.condition, CodeBlockToken(body), false)
+        transpileWhile(whileToken)
     }
 
     private fun transpileWhile(token: WhileToken) {
