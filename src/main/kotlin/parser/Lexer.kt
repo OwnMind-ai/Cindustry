@@ -6,7 +6,7 @@ class Lexer(private val stream: CharStream) {
         val OPERATORS = listOf(
             "+", "-", "*", "/", "%",
             "=", "+=", "*=", "-=", "/=", "++", "--",
-            ">", "<", ">=", "<=", "==", "===",
+            ">", "<", ">=", "<=", "==", "===", "!=",
             "!", "&&", "||", "&", "|", ">>", "<<",
             "@")
 
@@ -78,7 +78,7 @@ class Lexer(private val stream: CharStream) {
 
     private fun canParsePunctuation(): Boolean = PUNCTUATIONS.contains(stream.peek())
 
-    private fun canParseOperator(): Boolean = OPERATOR_CHARS.contains(stream.peek())
+    private fun canParseOperator(): Boolean = OPERATOR_CHARS.contains(stream.peek()) && stream.peek(2) !in listOf("//", "/*")
 
     private fun parseOperator(): OperatorToken {
         val operator = stream.takeWhile { OPERATOR_CHARS.contains(it) }

@@ -27,10 +27,37 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun transpileExecutableToken(token: ExecutableToken) {
-        if (token is InitializationToken)
-            transpileInitialization(token)
-        else if (token is ExpressionToken)
-            transpileExpression(token)
+        when (token) {
+            is InitializationToken -> transpileInitialization(token)
+            is ExpressionToken -> transpileExpression(token)
+            is WhileToken -> transpileWhile(token)
+            else -> throw IllegalArgumentException()
+        }
+    }
+
+    private fun transpileWhile(token: WhileToken) {
+        var jumpToConditionInstruction: JumpInstruction? = null
+        var startPointer = this.mainStream.size   // Assumes that the next added instruction will be a part of the while block
+
+        if (!token.isDoWhile) {
+            jumpToConditionInstruction = JumpInstruction.createAlways(-1, nextId())
+            this.mainStream.add(jumpToConditionInstruction)
+            startPointer++
+        }
+
+        variableStack.add(token.doBlock)
+        token.doBlock.statements.forEach(this::transpileExecutableToken)
+        variableStack.remove(token.doBlock)
+        val conditionPointer = this.mainStream.size
+
+        val startId = mainStream.getOrNull(startPointer)?.id ?: throw TranspileException("Illegal while block")
+        val condition = transpileExpressionWithReference(token.condition, DependedValue.createJump()).value
+        val conditionJump = JumpInstruction(if (condition == "true") "always" else condition, startId, nextId())
+        mainStream.add(conditionJump)
+
+        val conditionId = mainStream.getOrNull(conditionPointer)?.id ?: throw TranspileException("Illegal while block")
+
+        if (jumpToConditionInstruction != null) jumpToConditionInstruction.jumpToId = conditionId
     }
 
     private fun transpileExpression(token: ExpressionToken) {
@@ -47,7 +74,7 @@ class Transpiler(private val fileToken: FileToken) {
             val variableTyped = variable.getTyped()
 
             val value = if (increment) TypedExpression("1", Types.NUMBER, false)
-                        else transpileExpressionWithReference(token.right, if (assigmentComposition) null else variableTyped)
+                        else transpileExpressionWithReference(token.right, DependedValue(if (assigmentComposition) null else variableTyped))
 
             if (variable is VariableToken)
                 checkVariable(variable.getName()) { checkType(it.getTyped(), value) }
@@ -66,9 +93,10 @@ class Transpiler(private val fileToken: FileToken) {
             throw IllegalArgumentException()
     }
 
-    private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: TypedExpression? = null): TypedExpression {
+    private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: DependedValue = DependedValue(null)): TypedExpression {
         if (value is TypedToken) return value.value
         if (value is NumberToken) return TypedExpression(value.number, Types.NUMBER, false)
+        if (value is BooleanToken) return TypedExpression(if (value.value) "1" else "0", Types.BOOL, false)
         if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
         if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY, false)
 
@@ -90,7 +118,7 @@ class Transpiler(private val fileToken: FileToken) {
     private fun createBuffer(value: OperationToken) =
         TypedExpression(variableStack.requestBufferVariable(), getReturnType(value), false)
 
-    private fun transpileOperationChain(value: OperationToken, buffer: TypedExpression, dependedVariable: TypedExpression?, shortAssigmentPossible: Boolean = true): TypedExpression {
+    private fun transpileOperationChain(value: OperationToken, buffer: TypedExpression, dependedVariable: DependedValue, shortAssigmentPossible: Boolean = true): TypedExpression {
         if (value.isFlat()){
             val incremental = value.operator.operator in listOf("++", "--")
 
@@ -112,8 +140,6 @@ class Transpiler(private val fileToken: FileToken) {
                     val valueTokenResult = this.transpileExpressionWithReference(valueToken)
 
                     writeInstruction("op ${getOperationName(value.operator.operator)} ${operationBuffer.value} ${variable.getName()} #", valueTokenResult)
-
-//                    operationBuffer.addAfter = "set ${variableToken.name.word} ${operationBuffer.value}"
                     writeInstruction("set ${variable.getName()} ${operationBuffer.value}")
 
                     return operationBuffer
@@ -140,20 +166,31 @@ class Transpiler(private val fileToken: FileToken) {
         } else {
             val propagateLeft = value.left is OperationToken
             val shortAssigment = isShortAssigmentPossible(value.left, value.right)
+            val prepareBufferFunction: (TypedExpression, OperationToken) -> TypedExpression = { b, o ->
+                if (!b.compatible(TypedExpression("", getReturnType(o), false)))
+                    createBuffer(o)
+                else
+                    b
+            }
 
             val left: TypedExpression = if (!propagateLeft) transpileExpressionWithReference(value.left)
-                else transpileOperationChain(value.left as OperationToken, buffer, null, shortAssigment)
+                else transpileOperationChain(
+                value.left as OperationToken,
+                prepareBufferFunction(buffer, value.left as OperationToken),
+                DependedValue(null), shortAssigment
+            )
 
             val right: TypedExpression = if (value.right !is OperationToken) transpileExpressionWithReference(value.right)
                 else transpileOperationChain(
                     value.right as OperationToken,
-                    if (propagateLeft) createBuffer(value.right as OperationToken) else buffer,
-                    null, shortAssigment
+                    if (propagateLeft) createBuffer(value.right as OperationToken)
+                        else prepareBufferFunction.invoke(buffer, value.right as OperationToken),
+                    DependedValue(null), shortAssigment
                 )
 
             val operationToken = OperationToken(value.operator, left.toToken(), right.toToken())
             return if (value.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION) {
-                transpileOperationChain(operationToken, createBuffer(operationToken), left)
+                transpileOperationChain(operationToken, createBuffer(operationToken), DependedValue(left))
             } else {
                 transpileFlatOperation(
                     left, right, dependedVariable, value.operator.operator,
@@ -179,23 +216,29 @@ class Transpiler(private val fileToken: FileToken) {
                 && !(!finish && !isShortAssigmentPossible(right, left, true))
     }
 
-    private fun transpileFlatOperation(left: TypedExpression, right: TypedExpression, dependedVariable: TypedExpression?,
+    private fun transpileFlatOperation(left: TypedExpression, right: TypedExpression, dependedVariable: DependedValue,
         operation: String, value: OperationToken, buffer: TypedExpression
     ): TypedExpression {
         checkType(left, right)
 
-        if (dependedVariable != null) {
-            checkType(dependedVariable, left)
+        if (dependedVariable.jump) {
+            if (getReturnType(value) !in listOf(Types.BOOL, Types.ANY))
+                throw TranspileException("Invalid condition type ${getReturnType(value).name}")
+
+            // Although it is not really a complete expression, it is assumed tht it always comes with jump instruction
+            return TypedExpression("${getOperationName(operation)} ${left.value} ${right.value}", Types.BOOL, true)
+        } else if (dependedVariable.variable != null) {
+            checkType(dependedVariable.variable, TypedExpression("", getReturnType(value), false))
 
             //TODO some operators return bool (do same for buffer)
             return TypedExpression(
-                "op ${getOperationName(operation)} ${dependedVariable.value} ${left.value} ${right.value}",
-                left.type,
+                "op ${getOperationName(operation)} ${dependedVariable.variable.value} ${left.value} ${right.value}",
+                getReturnType(OperationToken(OperatorToken(operation), left.toToken(), right.toToken())),
                 true,
                 left.addAfter ?: right.addAfter
             )
         } else {
-            val result = transpileOperationChain(value, buffer, buffer)
+            val result = transpileOperationChain(value, buffer, DependedValue(buffer))
             if (result.complete) {
                 writeInstruction(result)
                 return buffer
@@ -220,7 +263,7 @@ class Transpiler(private val fileToken: FileToken) {
 
     private fun transpileInitialization(token: InitializationToken) {
         variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word, variableStack.blockStack.last().block))
-        val value = transpileExpressionWithReference(token.value, getVariable(token.name.word).getTyped())
+        val value = transpileExpressionWithReference(token.value, DependedValue(getVariable(token.name.word).getTyped()))
 
         checkType(variableStack.stack.last().getTyped(), value)
 
@@ -240,9 +283,16 @@ class Transpiler(private val fileToken: FileToken) {
             "-", "-=", "--" -> "sub"
             "*", "*=" -> "mul"
             "/", "/=" -> "div"
+            "%", "%=" -> "mod"
             "&&" -> "and"
             "||", "|" -> "or"
             "!=" -> "notEqual"
+            "==" -> "equal"
+            "===" -> "strictEqual"
+            ">" -> "greaterThan"
+            ">=" -> "greaterThanEq"
+            "<" -> "lessThan"
+            "<=" -> "lessThanEq"
             "!" -> throw UnsupportedOperationException()
 
             else -> value
@@ -254,7 +304,7 @@ class Transpiler(private val fileToken: FileToken) {
             "=" -> (token.left as? VariableToken)?.name?.word?.let { getVariable(it).getTyped().type } ?: Types.ANY
             "@" -> Types.BUILDING
             "+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "++", "--", ">>", "<<" -> Types.NUMBER
-            ">", "<", ">=", "<=", "==", "===", "!", "&&", "||", "&", "|" -> Types.BOOL
+            ">", "<", ">=", "<=", "==", "===", "!=", "!", "&&", "||", "&", "|" -> Types.BOOL
             else -> throw IllegalArgumentException()
         }
     }
@@ -268,9 +318,23 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    data class JumpInstruction(var condition: String, val instructionId: Int) : Instruction("", instructionId){
+    data class JumpInstruction(var condition: String, var jumpToId: Int, val instructionId: Int) : Instruction("", instructionId){
         override fun getCode(lineProvider: (Int) -> Int): String {
-            return "jump ${lineProvider.invoke(instructionId)} $condition"
+            return "jump ${lineProvider.invoke(jumpToId)} $condition"
+        }
+
+        companion object{
+            fun createAlways(jumpToId: Int, instructionId: Int): JumpInstruction{
+                return JumpInstruction("always", jumpToId, instructionId)
+            }
+        }
+    }
+
+    data class DependedValue(val variable: TypedExpression?, val jump: Boolean = false){
+        companion object{
+            fun createJump(): DependedValue{
+                return DependedValue(null, true)
+            }
         }
     }
 

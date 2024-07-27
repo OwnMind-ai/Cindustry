@@ -1,5 +1,9 @@
 void main(){
-    number a = 3;
-    any x = 1;
-    x = ++a * 4;  // Breaks, FIX
+    number a = 100;
+
+    do {
+        a = a / 2 - a / 3;
+    } while (a % 2 == 0);
+
+    number x = a;
 }

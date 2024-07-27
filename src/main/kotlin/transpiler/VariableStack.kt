@@ -17,6 +17,13 @@ class VariableStack {
         return "_buffer${scope.id}_${scope.bufferCount++}"
     }
 
+    fun remove(block: CodeBlockToken) {
+        val removed = blockStack.removeLastOrNull()
+
+        if (removed == null || removed.block != block)
+            throw IllegalStateException()  // TODO Change to InternalParserException
+    }
+
     data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken){
         fun getTyped(): TypedExpression{
             return TypedExpression(name, Types.valueOf(type.uppercase()), false)
