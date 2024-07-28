@@ -1,13 +1,20 @@
 package org.cindustry.parser
 
 object OperationOptimizer {
+    private val negationTransformations: Map<String, String> = mapOf(
+        Pair("==", "!="),
+        Pair(">", "<="),
+        Pair(">=", "<"),
+        Pair("<", ">="),
+        Pair("<=", ">"),
+        Pair("!=", "=="),
+    )
+
     /*TODO add optimizations:
         1. X == true -> X ; X == false -> !X
         2. x + x + x + x -> 4 * x ; same for -, * and /
         3. a + a * 3 -> a * 4 ; a + (a * 3 + 4) -> a * 4 + 4
-        4. !(x == y) -> x != y
      */
-
     fun optimize(token: OperationToken): ExpressionToken {
         var result: ExpressionToken = token
         optimizeDuplicates(token) { result = it }
@@ -124,6 +131,18 @@ object OperationOptimizer {
         } else if (left is NumberToken && left.number == "0" && operator == "+") {
             setter.invoke(right)
             return true
+        } else if (operator == "!" && right is BooleanToken){
+            setter.invoke(BooleanToken(!right.value))
+            return true
+        } else if (operator == "!" && right is OperationToken){
+            if (right.operator.operator == "!"){
+                setter.invoke(right.right)
+                return true
+            } else if (negationTransformations.containsKey(right.operator.operator)){
+                right.operator.operator = negationTransformations[right.operator.operator]!!
+                setter.invoke(right)
+                return true
+            }
         }
 
         var changed = false
