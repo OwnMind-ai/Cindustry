@@ -26,8 +26,11 @@ class VariableStack {
         stack.removeIf { it.codeBlock == removed.block }
     }
 
-    data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken){
-        fun getTyped(): TypedExpression{
+    data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken, var initialized: Boolean){
+        fun getTyped(ignoreInitialization: Boolean = false): TypedExpression{
+            if (!ignoreInitialization && !initialized)
+                throw TranspileException("Variable '$name' is not initialized")
+
             return TypedExpression(name, Types.valueOf(type.uppercase()), false)
         }
     }

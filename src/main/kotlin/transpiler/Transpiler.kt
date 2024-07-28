@@ -124,18 +124,19 @@ class Transpiler(private val fileToken: FileToken) {
 
             // TypedToken for buffer operations
             val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
-            val variableTyped = variable.getTyped()
+            val variableTyped = variable.getTyped(token.operator.operator == "=")
 
             val value = if (increment) TypedExpression("1", Types.NUMBER, false)
                         else transpileExpressionWithReference(token.right, DependedValue(if (assigmentComposition) null else variableTyped))
 
             if (variable is VariableToken)
-                checkVariable(variable.getName()) { checkType(it.getTyped(), value) }
+                checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
 
             if (value.complete){
                 writeInstruction(value)
             } else if (token.operator.operator == "=") {
                 writeInstruction("set ${variable.getName()} #", value)
+                getVariable(variable.getName()).initialized = true
             } else {
                 if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
                     throw TranspileException("Unable to perform string concatenation in this version")
@@ -331,15 +332,19 @@ class Transpiler(private val fileToken: FileToken) {
         if(variableStack.stack.any{ it.name == token.name.word })
             throw TranspileException("Variable '${token.name.word}' already exists in this scope")
 
-        variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word, variableStack.blockStack.last().block))
-        val value = transpileExpressionWithReference(token.value, DependedValue(getVariable(token.name.word).getTyped()))
+        variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word,
+                variableStack.blockStack.last().block, token.value != null))
 
-        checkType(variableStack.stack.last().getTyped(), value)
+        if (token.value != null) {
+            val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(token.name.word).getTyped()))
 
-        if (value.complete)
-            writeInstruction(value)
-        else
-            writeInstruction("set ${token.name.word} #", value)
+            checkType(variableStack.stack.last().getTyped(), value)
+
+            if (value.complete)
+                writeInstruction(value)
+            else
+                writeInstruction("set ${token.name.word} #", value)
+        }
     }
 
     private fun nextId(): Int{
@@ -443,9 +448,9 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    private fun NamedToken.getTyped(): TypedExpression{
+    private fun NamedToken.getTyped(ignoreInitialization: Boolean = false): TypedExpression{
         return if (this is TypedToken) this.value
-               else getVariable(this.getName()).getTyped()
+               else getVariable(this.getName()).getTyped(ignoreInitialization)
     }
 
     private fun TypedExpression.toToken(): TypedToken {

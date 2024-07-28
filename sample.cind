@@ -2,9 +2,9 @@ void main(){
     // Fizz Buzz (kinda)
     number n = 10;
     number o = 0;
-    number i = 0;
+    number i;
 
-    for(i = 0; i < 4; i++){
+    for(i = 0; i < n; i++){
         if(i % 3 == 0 && i % 5 == 0){
             o += 1000000;
         } else {

@@ -207,15 +207,17 @@ class Parser(private val lexer: Lexer) {
     private fun parseInitialization(): InitializationToken {
         val type = lexer.strictNext<WordToken>()
         val name = lexer.strictNext<WordToken>()
+        var value: ExecutableToken? = null
         name.assertNotKeyword()
 
-        lexer.strictNext<OperatorToken>().assert { it is OperatorToken && it.operator == "=" }
+        if (lexer.peek() is OperatorToken && (lexer.peek() as OperatorToken).operator == "=") {
+            lexer.next()
+            value = this.parseExpression()
+            if (value !is ExpressionToken)
+                throw ParserException("Invalid token, expression was expected")
+        }
 
-        val value = this.parseExpression()
-        if (value !is ExpressionToken)
-            throw ParserException("Invalid token, expression was expected")
-
-        return InitializationToken(type, name, value)
+        return InitializationToken(type, name, value as ExpressionToken?)
     }
 
     private fun parseParameters(): List<ParameterToken> {
