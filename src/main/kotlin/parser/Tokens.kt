@@ -135,9 +135,9 @@ data class WhileToken(
 ) : ExecutableToken, BlockToken
 
 data class ForToken(
-    var initialization: ExecutableToken,
-    var condition: ExpressionToken,
-    var after: ExecutableToken,
+    var initialization: ExecutableToken?,
+    var condition: ExpressionToken?,
+    var after: ExecutableToken?,
     var doBlock: CodeBlockToken
 ) : ExecutableToken, BlockToken
 

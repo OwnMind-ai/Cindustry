@@ -76,12 +76,15 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun transpileFor(token: ForToken) {
-        transpileExecutableToken(token.initialization)
+        if (token.initialization != null)
+            transpileExecutableToken(token.initialization!!)
 
         val body = token.doBlock.statements.toMutableList()
-        body.add(token.after)
+        if (token.after != null)
+            body.add(token.after!!)
 
-        val whileToken = WhileToken(token.condition, CodeBlockToken(body), false)
+        val condition = if (token.condition != null) token.condition!! else BooleanToken(true)
+        val whileToken = WhileToken(condition, CodeBlockToken(body), false)
         transpileWhile(whileToken)
     }
 

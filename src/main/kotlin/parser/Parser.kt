@@ -181,13 +181,18 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseFor(): ForToken {
-        val header = delimiter("(", ";", ")", ::parseExpression)
-        if (header.size != 3) throw ParserException("Invalid for statement")
+        val header = delimiter("(", ";", ")", {
+            if (lexer.peek() is PunctuationToken)
+                null
+            else
+                parseExpression()
+        })
+        if (header.size !in 2..3) throw ParserException("Invalid for statement")
 
-        if (header[1] !is ExpressionToken)
+        if (header[1] != null && header[1] !is ExpressionToken)
             throw ParserException("Invalid token, expression was expected")
 
-        return ForToken(header[0], header[1] as ExpressionToken, header[2], parseCodeBlock())
+        return ForToken(header[0], header[1] as ExpressionToken?, header.getOrNull(2), parseCodeBlock())
     }
 
     private fun parseCall(token: WordToken): ExecutableToken {
@@ -226,7 +231,7 @@ class Parser(private val lexer: Lexer) {
         return ParameterToken(type, name)
     }
 
-    private fun <T: Token> delimiter(start: String, separator: String, end: String, parser: () -> T, separatorIgnorePredicate: (T) -> Boolean = { false }): List<T>{
+    private fun <T: Token?> delimiter(start: String, separator: String, end: String, parser: () -> T, separatorIgnorePredicate: (T) -> Boolean = { false }): List<T>{
         val result: MutableList<T> = ArrayList()
         lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == start }
 
