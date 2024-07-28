@@ -2,11 +2,19 @@ package org.cindustry.parser
 
 class Parser(private val lexer: Lexer) {
     fun parse(): FileToken{
+        val globalVariables = ArrayList<InitializationToken>()
         val functions = ArrayList<FunctionDeclarationToken>()
-        while (!lexer.ended())
-            functions.add(parseFunction())
+        while (!lexer.ended()) {
+            if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global"){
+                lexer.next()
+                globalVariables.add(parseInitialization())
+                lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+            } else {
+                functions.add(parseFunction())
+            }
+        }
 
-        return FileToken(functions)
+        return FileToken(globalVariables, functions)
     }
 
     private fun parseFunction(): FunctionDeclarationToken {

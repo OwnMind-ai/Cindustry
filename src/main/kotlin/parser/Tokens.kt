@@ -165,6 +165,7 @@ data class FunctionDeclarationToken(
 ) : Token
 
 data class FileToken(
+    var globalVariables: List<InitializationToken>,
     var functions: List<FunctionDeclarationToken>
 ) : Token {
     override fun toString(): String {

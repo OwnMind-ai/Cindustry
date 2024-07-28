@@ -26,7 +26,7 @@ class VariableStack {
         stack.removeIf { it.codeBlock == removed.block }
     }
 
-    data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken, var initialized: Boolean){
+    data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken?, var initialized: Boolean){
         fun getTyped(ignoreInitialization: Boolean = false): TypedExpression{
             if (!ignoreInitialization && !initialized)
                 throw TranspileException("Variable '$name' is not initialized")
@@ -38,6 +38,11 @@ class VariableStack {
 
 enum class Types{
     NUMBER, VOID, STRING, BUILDING, ANY, BOOL
+}
+
+fun Types.compatible(other: Types): Boolean{
+    return other != Types.VOID && this != Types.VOID &&
+            (other == Types.ANY || this == Types.ANY || other == this)
 }
 
 data class Scope(val block: CodeBlockToken, val id: Int, var bufferCount: Int)
@@ -58,7 +63,6 @@ Although it is much more expensive, this case is really rare.
 */
 data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: String? = null){
     fun compatible(other: TypedExpression): Boolean{
-        return other.type != Types.VOID && this.type != Types.VOID &&
-                (other.type == Types.ANY || this.type == Types.ANY || other.type == this.type)
+        return type.compatible(other.type)
     }
 }

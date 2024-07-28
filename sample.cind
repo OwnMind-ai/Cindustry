@@ -1,3 +1,5 @@
+global number x = 0;
+
 void main(){
     // Fizz Buzz (kinda)
     number n = 10;
@@ -15,6 +17,4 @@ void main(){
             o += i;
         }
     }
-
-    any output = o;
 }

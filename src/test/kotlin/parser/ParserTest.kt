@@ -9,6 +9,9 @@ class ParserTest {
     @Test
     fun parse() {
         val file = """
+            global number x = 0;
+            global number a;
+            
             void main(){
                 number x = a++ * 4;
 
@@ -30,7 +33,12 @@ class ParserTest {
 
         val parser = Parser(Lexer(CharStream(file)))
 
-        assertEquals(FileToken(listOf(
+        assertEquals(FileToken(
+            listOf(
+                InitializationToken(WordToken("x"), WordToken("number"), NumberToken("0")),
+                InitializationToken(WordToken("a"), WordToken("number"), null)
+            ),
+            listOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),

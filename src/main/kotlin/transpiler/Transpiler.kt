@@ -9,6 +9,8 @@ class Transpiler(private val fileToken: FileToken) {
     private var counter = 0
 
     fun transpile(): String{
+        fileToken.globalVariables.forEach(::transpileInitialization)
+
         val main: FunctionDeclarationToken = fileToken.functions.find { it.name.word == "main" }
                 ?: throw TranspileException("No main function")
 
@@ -333,7 +335,7 @@ class Transpiler(private val fileToken: FileToken) {
             throw TranspileException("Variable '${token.name.word}' already exists in this scope")
 
         variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word,
-                variableStack.blockStack.last().block, token.value != null))
+            variableStack.blockStack.lastOrNull()?.block, token.value != null))
 
         if (token.value != null) {
             val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(token.name.word).getTyped()))
@@ -358,7 +360,8 @@ class Transpiler(private val fileToken: FileToken) {
             "*", "*=" -> "mul"
             "/", "/=" -> "div"
             "%", "%=" -> "mod"
-            "&&" -> "and"
+            "&&" -> "land"
+            "&" -> "and"
             "||", "|" -> "or"
             "!=", "!" -> "notEqual"
             "==" -> "equal"
