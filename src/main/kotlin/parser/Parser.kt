@@ -18,6 +18,19 @@ class Parser(private val lexer: Lexer) {
         return FunctionDeclarationToken(name, returnType, parameters, code)
     }
 
+    private fun parseBody(): CodeBlockToken{
+        return if ((lexer.peek() is PunctuationToken) && (lexer.peek() as PunctuationToken).character == "{")
+            parseCodeBlock()
+        else {
+            val line = parseExpression()
+
+            if (line !is BlockToken)
+                lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+
+            CodeBlockToken(mutableListOf(line))
+        }
+    }
+
     private fun parseCodeBlock(): CodeBlockToken {
         val token = CodeBlockToken(
             delimiter("{", ";", "}", this::parseExpression,
@@ -141,12 +154,12 @@ class Parser(private val lexer: Lexer) {
         val condition = parseExpression()
         lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == ")" }
 
-        val doBlock = parseCodeBlock()
+        val doBlock = parseBody()
         var elseBlock: CodeBlockToken? = null
 
         if (lexer.peek() is WordToken && (lexer.peek() as WordToken).word == "else") {
             lexer.next()
-            elseBlock = parseCodeBlock()
+            elseBlock = parseBody()
         }
 
         if (condition !is ExpressionToken)
@@ -163,11 +176,11 @@ class Parser(private val lexer: Lexer) {
         if (condition !is ExpressionToken)
             throw ParserException("Invalid token, expression was expected")
 
-        return WhileToken(condition, parseCodeBlock(), false)
+        return WhileToken(condition, parseBody(), false)
     }
 
     private fun parseDoWhile(): WhileToken {
-        val doBlock = parseCodeBlock()
+        val doBlock = parseBody()
 
         lexer.strictNext<WordToken>().assert { it is WordToken && it.word == "while" }
         lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == "(" }
@@ -192,7 +205,7 @@ class Parser(private val lexer: Lexer) {
         if (header[1] != null && header[1] !is ExpressionToken)
             throw ParserException("Invalid token, expression was expected")
 
-        return ForToken(header[0], header[1] as ExpressionToken?, header.getOrNull(2), parseCodeBlock())
+        return ForToken(header[0], header[1] as ExpressionToken?, header.getOrNull(2), parseBody())
     }
 
     private fun parseCall(token: WordToken): ExecutableToken {
