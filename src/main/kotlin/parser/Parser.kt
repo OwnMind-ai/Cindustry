@@ -4,17 +4,29 @@ class Parser(private val lexer: Lexer) {
     fun parse(): FileToken{
         val globalVariables = ArrayList<InitializationToken>()
         val functions = ArrayList<FunctionDeclarationToken>()
-        while (!lexer.ended()) {
-            if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global"){
-                lexer.next()
-                globalVariables.add(parseInitialization())
-                lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
-            } else {
-                functions.add(parseFunction())
-            }
-        }
+        while (!lexer.ended())
+            parseOnFileLevel(globalVariables, functions)
 
         return FileToken(globalVariables, functions)
+    }
+
+    private fun parseOnFileLevel(globalVariables: ArrayList<InitializationToken>, functions: ArrayList<FunctionDeclarationToken>) {
+        if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "use") {
+            lexer.next()
+            lexer.strictNext<OperatorToken>().assert { (it as OperatorToken).operator == "@" }
+            val name = lexer.strictNext<WordToken>()
+            name.assertNotKeyword()
+
+            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+
+            globalVariables.add(InitializationToken(name, WordToken("building"), BuildingToken(name.word)))
+        } else if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global") {
+            lexer.next()
+            globalVariables.add(parseInitialization())
+            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+        } else {
+            functions.add(parseFunction())
+        }
     }
 
     private fun parseFunction(): FunctionDeclarationToken {

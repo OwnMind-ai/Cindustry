@@ -13,7 +13,8 @@ data class WordToken(
     var word: String
 ) : Token {
     companion object{
-        val TYPES = listOf("number", "string", "bool", "building", "any", "void")  //TODO add int and float
+        val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
+        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", )
     }
 
     fun assertTypeKeyword() {
@@ -21,7 +22,7 @@ data class WordToken(
     }
 
     fun assertNotKeyword() {
-        assert{ !TYPES.contains(word) }
+        assert{ !TYPES.contains(word) && !KEYWORDS.contains(word) }
     }
 }
 
@@ -70,6 +71,10 @@ data class NumberToken(
 
 data class BooleanToken(
     var value: Boolean
+) : ExpressionToken
+
+data class BuildingToken(
+    var name: String
 ) : ExpressionToken
 
 // PARSER LEVEL

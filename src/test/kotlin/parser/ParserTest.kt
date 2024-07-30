@@ -9,7 +9,7 @@ class ParserTest {
     @Test
     fun parse() {
         val file = """
-            global number x = 0;
+            use @message1; 
             global number a;
             
             void main(){
@@ -35,7 +35,7 @@ class ParserTest {
 
         assertEquals(FileToken(
             listOf(
-                InitializationToken(WordToken("x"), WordToken("number"), NumberToken("0")),
+                InitializationToken(WordToken("message1"), WordToken("building"), BuildingToken("message1")),
                 InitializationToken(WordToken("a"), WordToken("number"), null)
             ),
             listOf(

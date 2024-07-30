@@ -375,7 +375,7 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    private fun getReturnType(token: OperationToken): Types{
+    private fun getReturnType(token: OperationToken): Types {
         return when(token.operator.operator){
             "=" -> (token.left as? VariableToken)?.name?.word?.let { getVariable(it).getTyped().type } ?: Types.ANY
             "@" -> Types.BUILDING
