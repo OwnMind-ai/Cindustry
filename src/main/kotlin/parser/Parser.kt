@@ -19,7 +19,7 @@ class Parser(private val lexer: Lexer) {
 
             lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
 
-            globalVariables.add(InitializationToken(name, WordToken("building"), BuildingToken(name.word)))
+            globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
         } else if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global") {
             lexer.next()
             globalVariables.add(parseInitialization())

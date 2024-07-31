@@ -14,7 +14,7 @@ data class WordToken(
 ) : Token {
     companion object{
         val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
-        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", )
+        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global")
     }
 
     fun assertTypeKeyword() {
@@ -167,7 +167,7 @@ data class FunctionDeclarationToken(
     var returnType: WordToken,
     var parameters: List<ParameterToken>,
     var codeBlock: CodeBlockToken
-) : Token
+) : Token, BlockToken
 
 data class FileToken(
     var globalVariables: List<InitializationToken>,

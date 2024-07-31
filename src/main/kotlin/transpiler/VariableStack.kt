@@ -1,5 +1,6 @@
 package org.cindustry.transpiler
 
+import org.cindustry.parser.BlockToken
 import org.cindustry.parser.CodeBlockToken
 import java.util.*
 
@@ -7,9 +8,9 @@ class VariableStack {
     val stack: LinkedList<VariableData> = LinkedList()
     val blockStack: LinkedList<Scope> = LinkedList()
 
-    fun add(block: CodeBlockToken){
+    fun add(block: CodeBlockToken, parent: BlockToken){
         val id = blockStack.lastOrNull()?.id ?: 0
-        blockStack.add(Scope(block, id, 0))
+        blockStack.add(Scope(block, parent, id, 0))
     }
 
     fun requestBufferVariable(): String {
@@ -36,7 +37,7 @@ class VariableStack {
     }
 }
 
-data class Scope(val block: CodeBlockToken, val id: Int, var bufferCount: Int)
+data class Scope(val block: CodeBlockToken, val parentToken: BlockToken, val id: Int, var bufferCount: Int)
 
 /*
 'executeAfter' exists because of this case: "x = a++ * 4".

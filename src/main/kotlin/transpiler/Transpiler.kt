@@ -1,11 +1,17 @@
 package org.cindustry.transpiler
 
 import org.cindustry.parser.*
+import java.util.*
 
 class Transpiler(private val fileToken: FileToken) {
+    companion object{
+        const val AFTER_BLOCK_END = "blockStart"
+        const val AFTER_LOOP_END = "afterLoopEnd"
+    }
 
     private val mainStream: MutableList<Instruction> = ArrayList()
     private val variableStack: VariableStack = VariableStack()
+    private val jumpIdPending: MutableMap<BlockToken, MutableList<Pair<String, JumpInstruction>>> = IdentityHashMap()
     private var counter = 0
 
     fun transpile(): String{
@@ -14,7 +20,7 @@ class Transpiler(private val fileToken: FileToken) {
         val main: FunctionDeclarationToken = fileToken.functions.find { it.name.word == "main" }
                 ?: throw TranspileException("No main function")
 
-        variableStack.add(main.codeBlock)
+        variableStack.add(main.codeBlock, main)
         main.codeBlock.statements.forEach(this::transpileExecutableToken)
 
         val firstId = mainStream[0].id
@@ -42,7 +48,29 @@ class Transpiler(private val fileToken: FileToken) {
             is WhileToken -> transpileWhile(token)
             is ForToken -> transpileFor(token)
             is IfToken -> transpileIf(token)
+            is ReturnToken -> transpileReturn(token)
             else -> throw IllegalArgumentException()
+        }
+    }
+
+    private fun transpileReturn(token: ReturnToken) {
+        if (token.type.word == "return"){
+            val function = variableStack.blockStack.findLast { it.parentToken is FunctionDeclarationToken }!!
+                    .parentToken as FunctionDeclarationToken
+
+            if (function.name.word != "main") TODO()
+
+            writeInstruction("end")
+        } else {
+            val loop = variableStack.blockStack.findLast { it.parentToken is ForToken || it.parentToken is WhileToken }
+                ?.parentToken
+            if (loop == null)
+                throw  TranspileException("There is no loop to ${token.type.word}")
+
+            val jump = JumpInstruction.createAlways(-1, nextId())
+            mainStream.add(jump)
+
+            jumpIdPending[loop]!!.add(Pair(if(token.type.word == "break") AFTER_LOOP_END else AFTER_BLOCK_END, jump))
         }
     }
 
@@ -55,21 +83,21 @@ class Transpiler(private val fileToken: FileToken) {
         val conditionJump = JumpInstruction(if (condition == "true") "always" else condition, -1, nextId())
         mainStream.add(conditionJump)
 
-        variableStack.add(token.doBlock)
+        variableStack.add(token.doBlock, token)
         token.doBlock.statements.forEach(this::transpileExecutableToken)
         variableStack.remove(token.doBlock)
 
         // We assume there is code after if-statement (it could be else-block too) and loosely referencing it
         // (if there is none, transpiler will redirect the reference to the start of the program,
         // as if it was ended)
-        conditionJump.jumpToId = mainStream.size  //TODO fix, it is unsafe
+        conditionJump.jumpToId = mainStream.size  //TODO fix, it is unsafe (same for while loop)
 
         if (token.elseBlock != null){
             val ifEndedJump = JumpInstruction("always", -1, nextId())
             mainStream.add(ifEndedJump)
             conditionJump.jumpToId++
 
-            variableStack.add(token.elseBlock!!)
+            variableStack.add(token.elseBlock!!, token)
             token.elseBlock!!.statements.forEach(this::transpileExecutableToken)
             variableStack.remove(token.elseBlock!!)
 
@@ -81,17 +109,14 @@ class Transpiler(private val fileToken: FileToken) {
         if (token.initialization != null)
             transpileExecutableToken(token.initialization!!)
 
-        val body = token.doBlock.statements.toMutableList()
-        if (token.after != null)
-            body.add(token.after!!)
-
         val condition = if (token.condition != null) token.condition!! else BooleanToken(true)
-        val whileToken = WhileToken(condition, CodeBlockToken(body), false)
-        transpileWhile(whileToken)
+        val whileToken = WhileToken(condition, token.doBlock, false)
+        transpileWhile(whileToken, token.after)
     }
 
-    private fun transpileWhile(token: WhileToken) {
+    private fun transpileWhile(token: WhileToken, afterBlock: ExecutableToken? = null) {
         var jumpToConditionInstruction: JumpInstruction? = null
+        var blockEndPointer: Int? = null
         var startPointer = this.mainStream.size   // Assumes that the next added instruction will be a part of the while block
 
         if (!token.isDoWhile) {
@@ -100,9 +125,17 @@ class Transpiler(private val fileToken: FileToken) {
              startPointer++
         }
 
-        variableStack.add(token.doBlock)
+        jumpIdPending[token] = ArrayList()
+
+        variableStack.add(token.doBlock, token)
         token.doBlock.statements.forEach(this::transpileExecutableToken)
         variableStack.remove(token.doBlock)
+
+        if (afterBlock != null){
+            blockEndPointer = this.mainStream.size
+            this.transpileExecutableToken(afterBlock)
+        }
+
         val conditionPointer = this.mainStream.size
 
         val startId = mainStream.getOrNull(startPointer)?.id ?: throw TranspileException("Illegal while block")
@@ -111,8 +144,14 @@ class Transpiler(private val fileToken: FileToken) {
         mainStream.add(conditionJump)
 
         val conditionId = mainStream.getOrNull(conditionPointer)?.id ?: throw TranspileException("Illegal while block")
+        jumpToConditionInstruction?.jumpToId = conditionId
+        if (blockEndPointer == null) blockEndPointer = conditionId
 
-        if (jumpToConditionInstruction != null) jumpToConditionInstruction.jumpToId = conditionId
+        jumpIdPending.remove(token)!!.forEach { it.second.jumpToId = when(it.first){
+            AFTER_LOOP_END -> mainStream.size  // FIX
+            AFTER_BLOCK_END -> blockEndPointer
+            else -> throw IllegalArgumentException()
+        } }
     }
 
     private fun transpileExpression(token: ExpressionToken) {
@@ -337,7 +376,7 @@ class Transpiler(private val fileToken: FileToken) {
         variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word,
             variableStack.blockStack.lastOrNull()?.block, token.value != null))
 
-        if (token.value != null) {
+        if (token.value != null && token.value !is BuildingToken) {
             val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(token.name.word).getTyped()))
 
             checkType(variableStack.stack.last().getTyped(), value)

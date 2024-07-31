@@ -35,7 +35,7 @@ class ParserTest {
 
         assertEquals(FileToken(
             listOf(
-                InitializationToken(WordToken("message1"), WordToken("building"), BuildingToken("message1")),
+                InitializationToken(WordToken("building"), WordToken("message1"), BuildingToken("message1")),
                 InitializationToken(WordToken("a"), WordToken("number"), null)
             ),
             listOf(
