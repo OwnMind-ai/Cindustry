@@ -8,8 +8,8 @@ void main(){
     number i;
 
     for(i = 0; i < n; i++){
-        if(i > 0 && i % 3 == 0 && i % 5 == 0){
-            return;
+        if(i++ > 0 && i % 3 == 0 && i % 5 == 0){
+            break;
         } else if (i % 3 == 0) {
             o += 10000;
         } else if (i % 5 == 0){
