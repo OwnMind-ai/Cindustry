@@ -49,19 +49,29 @@ data class OperatorToken(
 
     fun getPriority(): Int{
         return when(operator){
-            "=", "+=", "-=", "*=", "/=", -> 1
+            "=", "+=", "-=", "*=", "/=", "%=" -> 1
             "||", "|" -> 3
             "&&", "&" -> 4
             "<", ">", "<=", ">=", "==", "!=", "===" -> 7
             "+", "-" -> 10
             "*", "/", "%", ">>", "<<" -> 20
             "++", "--" -> 30
+            "@" -> 50
             else -> Int.MIN_VALUE
         }
     }
 
     fun assertUnary() {
         assert{ listOf("-", "+", "@", "!", "++", "--").contains(operator) }
+    }
+
+    fun primary(): OperatorToken {
+        return OperatorToken(when(operator){
+            "+=", "-=", "*=", "/=", "%=" -> operator.replace("=", "")
+            "++" -> "+"
+            "--" -> "-"
+            else -> operator
+        })
     }
 }
 
@@ -82,6 +92,7 @@ data class BuildingToken(
 interface ExecutableToken : Token
 interface ExpressionToken : ExecutableToken
 interface BlockToken
+interface AssignableToken
 
 data class CodeBlockToken(
     var statements: List<ExecutableToken>
@@ -107,15 +118,19 @@ data class OperationToken(
     fun isFlat(): Boolean{
         return left !is OperationToken && left !is CallToken && right !is OperationToken && right !is CallToken
     }
-
 }
+
+data class FieldAccessToken(
+    var from: ExpressionToken,
+    var field: WordToken
+) : ExpressionToken, AssignableToken
 
 data class CallToken(
     var name: WordToken,
     var parameters: List<ExpressionToken>
 ) : ExpressionToken
 
-interface NamedToken{
+interface NamedToken : AssignableToken{
     fun getName(): String
 }
 

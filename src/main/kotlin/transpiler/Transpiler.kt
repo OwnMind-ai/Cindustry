@@ -1,9 +1,12 @@
 package org.cindustry.transpiler
 
 import org.cindustry.parser.*
+import org.cindustry.transpiler.instructions.Instruction
+import org.cindustry.transpiler.instructions.InstructionManager
+import org.cindustry.transpiler.instructions.JumpInstruction
 import java.util.*
 
-class Transpiler(private val fileToken: FileToken) {
+class Transpiler(private val fileToken: FileToken) : InstructionManager{
     companion object{
         const val AFTER_BLOCK_END = "blockStart"
         const val AFTER_LOOP_END = "afterLoopEnd"
@@ -81,7 +84,8 @@ class Transpiler(private val fileToken: FileToken) {
                 OperationToken(OperatorToken("!"), OperationToken.EmptySide(), token.condition))
 
         val condition = transpileExpressionWithReference(conditionToken, DependedValue.createJump()).value
-        val conditionJump = JumpInstruction(if (condition == "true") "always" else condition, -1, nextId())
+        val conditionJump =
+            JumpInstruction(if (condition == "true") "always" else condition, -1, nextId())
         writeJumpInstruction(conditionJump)
 
         variableStack.add(token.doBlock, token)
@@ -142,7 +146,8 @@ class Transpiler(private val fileToken: FileToken) {
         if (startId == null) throw TranspileException("Illegal while block")
 
         val condition = transpileExpressionWithReference(token.condition, DependedValue.createJump()).value
-        val conditionJump = JumpInstruction(if (condition == "true") "always" else condition, startId!!, nextId())
+        val conditionJump =
+            JumpInstruction(if (condition == "true") "always" else condition, startId!!, nextId())
         writeJumpInstruction(conditionJump)
 
         jumpToConditionInstruction?.jumpToId = conditionId ?: throw TranspileException("Illegal while block")
@@ -160,13 +165,40 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun transpileExpression(token: ExpressionToken) {
-        if (token is NumberToken || token is StringToken || token is BooleanToken) return
+        if (token is NumberToken || token is StringToken || token is BooleanToken || token is FieldAccessToken) return
 
         if (token is OperationToken){
             // We don't care if it is ++x or x++, because we don't use return value
             val increment = token.operator.operator in listOf("++", "--")
             val assigmentComposition = token.operator.operator != "=" && token.operator.operator in OperatorToken.ASSIGMENT_OPERATION
-            if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION || token.left !is NamedToken) && !increment) throw TranspileException("Invalid expression")
+            if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION ||
+                        (token.left !is NamedToken && token.left !is FieldAccessToken)) && !increment)
+                throw TranspileException("Invalid expression")
+
+            if (token.left is FieldAccessToken){
+                val field = token.left as FieldAccessToken
+
+                val from = transpileExpressionWithReference(field.from)
+                if(from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+
+                val fieldData = BuildingFields.getField(field.field.word)!!
+                if (!fieldData.mutable)
+                    throw TranspileException("Property '${field.field.word}' is immutable")
+
+                val value = if (token.operator.operator != "=") {
+                    transpileExpressionWithReference(OperationToken(
+                        token.operator.primary(), field, if (increment) NumberToken("1") else token.left
+                    ))
+                } else {
+                    if (increment) TypedExpression("1", Types.NUMBER, false)
+                        else transpileExpressionWithReference(token.right)
+                }
+
+                checkType(value.type, fieldData.resultType)
+
+                writeInstruction("control ${field.field.word} ${from.value} ${value.value}")
+                return
+            }
 
             // TypedToken for buffer operations
             val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
@@ -201,19 +233,36 @@ class Transpiler(private val fileToken: FileToken) {
         if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
         if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY, false)
 
+        if (value is BuildingToken) {
+            checkVariable(value.name){ checkType(it.getTyped().type, Types.BUILDING) }
+            return TypedExpression(value.name, Types.BUILDING, false)
+        }
+
         if (value is VariableToken) {
             var variable: TypedExpression? = null
             checkVariable(value.name.word) { variable = it.getTyped() }
             return variable!!
         }
 
-        if (value is OperationToken){
-            return this.transpileOperationChain(value,
-                createBuffer(value),  //TODO destroy
-                dependedVariable)
-        }
+        if (value is FieldAccessToken)
+            return this.transpileFieldValue(value)
+
+        if (value is OperationToken)
+            return this.transpileOperationChain(value, createBuffer(value)  /*TODO destroy*/, dependedVariable)
 
         throw IllegalArgumentException()
+    }
+
+    private fun transpileFieldValue(token: FieldAccessToken): TypedExpression {
+        val from = transpileExpressionWithReference(token.from)
+        if(from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+
+        val field = BuildingFields.getField(token.field.word) ?: throw TranspileException("Unknown building property")
+        val buffer = TypedExpression(variableStack.requestBufferVariable(), field.resultType, false)
+
+        writeInstruction("sensor ${buffer.value} ${from.value} @${field.actualName}")
+
+        return buffer
     }
 
     private fun createBuffer(value: OperationToken) =
@@ -350,7 +399,8 @@ class Transpiler(private val fileToken: FileToken) {
                 left.addAfter ?: right.addAfter
             )
         } else {
-            val result = transpileOperationChain(value, buffer, DependedValue(buffer))
+            val result = transpileOperationChain(OperationToken(value.operator, left.toToken(), right.toToken()),
+                    buffer, DependedValue(buffer))
             if (result.complete) {
                 writeInstruction(result)
                 return buffer
@@ -361,8 +411,12 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     private fun checkType(first: TypedExpression, second: TypedExpression) {
+        checkType(first.type, second.type)
+    }
+
+    private fun checkType(first: Types, second: Types) {
         if (!first.compatible(second))
-            throw TranspileException("Type '${first.type.name.lowercase()}' is not compatible with type '${second.type.name.lowercase()}'")
+            throw TranspileException("Type '${first.name.lowercase()}' is not compatible with type '${second.name.lowercase()}'")
     }
 
     private fun checkVariable(name: String, ifFound: (VariableStack.VariableData) -> Unit = { }) {
@@ -392,7 +446,7 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    private fun nextId(): Int{
+    override fun nextId(): Int{
         return counter++
     }
 
@@ -428,27 +482,6 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    open class Instruction(
-        private var code: String,
-        val id: Int
-    ) {
-        open fun getCode(lineProvider: (Int) -> Int): String{
-            return code
-        }
-    }
-
-    data class JumpInstruction(var condition: String, var jumpToId: Int, val instructionId: Int) : Instruction("", instructionId){
-        override fun getCode(lineProvider: (Int) -> Int): String {
-            return "jump ${lineProvider.invoke(jumpToId)} $condition"
-        }
-
-        companion object{
-            fun createAlways(jumpToId: Int, instructionId: Int): JumpInstruction{
-                return JumpInstruction("always", jumpToId, instructionId)
-            }
-        }
-    }
-
     data class DependedValue(val variable: TypedExpression?, val jump: Boolean = false){
         companion object{
             fun createJump(): DependedValue{
@@ -457,14 +490,14 @@ class Transpiler(private val fileToken: FileToken) {
         }
     }
 
-    private fun writeJumpInstruction(instruction: JumpInstruction){
+    override fun writeJumpInstruction(instruction: JumpInstruction){
         mainStream.add(instruction)
 
         nextIdPending.forEach { it.invoke(instruction.instructionId) }
         nextIdPending.clear()
     }
 
-    private fun writeInstruction(expression: TypedExpression){
+    override fun writeInstruction(expression: TypedExpression){
         if (expression.value == "EMPTY")
             throw IllegalArgumentException("Empty side used")
 
@@ -479,7 +512,7 @@ class Transpiler(private val fileToken: FileToken) {
     }
 
     // Use # to indicate
-    private fun writeInstruction(code: String, vararg elements: TypedExpression){
+    override fun writeInstruction(code: String, vararg elements: TypedExpression){
         if (elements.any { it.value == "EMPTY" })
             throw IllegalArgumentException("Empty side used")
 
@@ -517,4 +550,3 @@ class Transpiler(private val fileToken: FileToken) {
         return TypedToken(this)
     }
 }
-

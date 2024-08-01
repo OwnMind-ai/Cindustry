@@ -8,9 +8,13 @@ class VariableStack {
     val stack: LinkedList<VariableData> = LinkedList()
     val blockStack: LinkedList<Scope> = LinkedList()
 
+    init {
+        blockStack.add(Scope(null, null, 0, 0))  // File scope
+    }
+
     fun add(block: CodeBlockToken, parent: BlockToken){
-        val id = blockStack.lastOrNull()?.id ?: 0
-        blockStack.add(Scope(block, parent, id, 0))
+        val id = blockStack.last().id
+        blockStack.add(Scope(block, parent, id + 1, 0))
     }
 
     fun requestBufferVariable(): String {
@@ -19,9 +23,9 @@ class VariableStack {
     }
 
     fun remove(block: CodeBlockToken) {
-        val removed = blockStack.removeLastOrNull()
+        val removed = blockStack.removeLast()
 
-        if (removed == null || removed.block != block)
+        if (removed.block != block)
             throw IllegalStateException()  // TODO Change to InternalParserException
 
         stack.removeIf { it.codeBlock == removed.block }
@@ -37,7 +41,7 @@ class VariableStack {
     }
 }
 
-data class Scope(val block: CodeBlockToken, val parentToken: BlockToken, val id: Int, var bufferCount: Int)
+data class Scope(val block: CodeBlockToken?, val parentToken: BlockToken?, val id: Int, var bufferCount: Int)
 
 /*
 'executeAfter' exists because of this case: "x = a++ * 4".

@@ -20,7 +20,7 @@ class ParserTest {
                     print(x++, @message1);
                     wait(.5);
                     
-                    x = a = 5;
+                    x = a = @object.heat;
                     if(x == x + a * 10 + 5){
                         break;
                     }
@@ -49,13 +49,13 @@ class ParserTest {
 
                     CodeBlockToken(listOf(
                     CallToken(WordToken("print"), listOf(OperationToken(OperatorToken("++"), VariableToken(
-                        WordToken("x")), OperationToken.EmptySide()),
-                        OperationToken(OperatorToken("@"), OperationToken.EmptySide(), VariableToken(WordToken("message1")))
+                        WordToken("x")), OperationToken.EmptySide()), BuildingToken("message1")
                     )),
 
                     CallToken(WordToken("wait"), listOf(NumberToken("0.5"))),
                     OperationToken(OperatorToken("="), VariableToken(WordToken("x")),
-                        OperationToken(OperatorToken("="), VariableToken(WordToken("a")), NumberToken("5"))),
+                        OperationToken(OperatorToken("="), VariableToken(WordToken("a")),
+                            FieldAccessToken(BuildingToken("object"), WordToken("heat")))),
 
                     IfToken(OperationToken(OperatorToken("=="), VariableToken(WordToken("x")),
                         OperationToken(OperatorToken("+"), VariableToken(WordToken("x")),

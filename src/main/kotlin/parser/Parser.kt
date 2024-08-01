@@ -72,7 +72,7 @@ class Parser(private val lexer: Lexer) {
         val next = lexer.peek()
 
         if (token is ExpressionToken && next is OperatorToken) {
-            if ((next.operator == "++" || next.operator == "--") && token is VariableToken)
+            if ((next.operator == "++" || next.operator == "--") && token is AssignableToken)
                 return buildExpressionTree(OperationToken(lexer.strictNext(), token, OperationToken.EmptySide()), 0)
 
             if (next.getPriority() >= currentPriority) {
@@ -84,6 +84,15 @@ class Parser(private val lexer: Lexer) {
 
                 return buildExpressionTree(OperationToken(operator, token, right), currentPriority)
             }
+        } else if (token is ExpressionToken && next is PunctuationToken && next.character == "."){
+            lexer.strictNext<PunctuationToken>()
+            val field = lexer.strictNext<WordToken>()
+            field.assertNotKeyword()
+
+            if (token !is VariableToken && token !is CallToken && token !is FieldAccessToken && token !is BuildingToken)
+                throw ParserException("Unable to access field '${field.word}'")
+
+            return buildExpressionTree(FieldAccessToken(token, field), 0)
         }
 
         return token
@@ -96,14 +105,17 @@ class Parser(private val lexer: Lexer) {
             current.assertUnary()
 
             lexer.next()
-            val right = if(current.operator in listOf("++", "--")){
+            val right = if(current.operator in listOf("@", "++", "--")){
                 val peeked = lexer.peek()
                 if (peeked !is WordToken) throw ParserException("Invalid operator use")
 
                 val result = parseWordToken(peeked)
                 if (result !is VariableToken) throw ParserException("Invalid operator use")
 
-                result
+                if (current.operator == "@")
+                    return BuildingToken(result.getName())
+                else
+                    result
             } else
                 parseExpression()
 

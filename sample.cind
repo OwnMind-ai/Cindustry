@@ -1,7 +1,9 @@
-global number x = 0;
 use @message1;
+global bool x = @message1.enabled;
 
 void main(){
+    @message1.color++;
+
     // Fizz Buzz (kinda)
     number n = 20;
     number o = 0;
@@ -9,7 +11,7 @@ void main(){
 
     for(i = 0; i < n; i++){
         if(i++ > 0 && i % 3 == 0 && i % 5 == 0){
-            break;
+            o += 1000000;
         } else if (i % 3 == 0) {
             o += 10000;
         } else if (i % 5 == 0){
@@ -17,10 +19,7 @@ void main(){
         } else {
             o += i;
         }
-
-        x++;
     }
 
     any output = o;
-    any output2 = x;
 }
