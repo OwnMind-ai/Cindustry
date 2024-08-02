@@ -14,6 +14,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
 
     private val mainStream: MutableList<Instruction> = ArrayList()
     private val variableStack: VariableStack = VariableStack()
+    private val functionRegistry: FunctionRegistry = FunctionRegistry(this)
+
     private val jumpIdPending: MutableMap<BlockToken, MutableList<Pair<String, JumpInstruction>>> = IdentityHashMap()
     private val nextIdPending: MutableList<(Int) -> Unit> = LinkedList()
     private var counter = 0
@@ -174,62 +176,92 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     private fun transpileExpression(token: ExpressionToken) {
         if (token is NumberToken || token is StringToken || token is BooleanToken || token is FieldAccessToken) return
 
-        if (token is OperationToken){
-            // We don't care if it is ++x or x++, because we don't use return value
-            val increment = token.operator.operator in listOf("++", "--")
-            val assigmentComposition = token.operator.operator != "=" && token.operator.operator in OperatorToken.ASSIGMENT_OPERATION
-            if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION ||
-                        (token.left !is NamedToken && token.left !is FieldAccessToken)) && !increment)
-                throw TranspileException("Invalid expression")
+        when (token) {
+            is OperationToken -> transpileOperationStatement(token)
+            is CallToken -> transpileCallToken(token)
+            else -> throw IllegalArgumentException()
+        }
+    }
 
-            if (token.left is FieldAccessToken){
-                val field = token.left as FieldAccessToken
+    private fun transpileCallToken(
+        token: CallToken, dependedVariable: DependedValue = DependedValue(null)
+    ): TypedExpression? {
+        val parameters = token.parameters.map { transpileExpressionWithReference(it) }
 
-                val from = transpileExpressionWithReference(field.from)
-                if(from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+        val function = functionRegistry.getFunctionData(token.name.word, parameters.map { it.type })
+                       ?: throw TranspileException("Function '${token.name}' is not defined")
 
-                val fieldData = BuildingFields.getField(field.field.word)!!
-                if (!fieldData.mutable)
-                    throw TranspileException("Property '${field.field.word}' is immutable")
+        return if (function.transpilationFunction != null){
+            function.transpilationFunction.invoke(parameters, dependedVariable)
+        } else {
+            TODO()
+        }
+    }
 
-                val value = if (token.operator.operator != "=") {
-                    transpileExpressionWithReference(OperationToken(
+    private fun transpileOperationStatement(token: OperationToken) {
+        // We don't care if it is ++x or x++, because we don't use return value
+        val increment = token.operator.operator in listOf("++", "--")
+        val assigmentComposition =
+            token.operator.operator != "=" && token.operator.operator in OperatorToken.ASSIGMENT_OPERATION
+        if ((token.operator.operator !in OperatorToken.ASSIGMENT_OPERATION ||
+                    (token.left !is NamedToken && token.left !is FieldAccessToken)) && !increment
+        )
+            throw TranspileException("Invalid expression")
+
+        if (token.left is FieldAccessToken) {
+            val field = token.left as FieldAccessToken
+
+            val from = transpileExpressionWithReference(field.from)
+            if (from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+
+            val fieldData = BuildingFields.getField(field.field.word)!!
+            if (!fieldData.mutable)
+                throw TranspileException("Property '${field.field.word}' is immutable")
+
+            val value = if (token.operator.operator != "=") {
+                transpileExpressionWithReference(
+                    OperationToken(
                         token.operator.primary(), field, if (increment) NumberToken("1") else token.left
-                    ))
-                } else {
-                    if (increment) TypedExpression("1", Types.NUMBER, false)
-                        else transpileExpressionWithReference(token.right)
-                }
-
-                checkType(value.type, fieldData.resultType)
-
-                writeInstruction("control ${field.field.word} ${from.value} ${value.value}")
-                return
-            }
-
-            // TypedToken for buffer operations
-            val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
-            val variableTyped = variable.getTyped(token.operator.operator == "=")
-
-            val value = if (increment) TypedExpression("1", Types.NUMBER, false)
-                        else transpileExpressionWithReference(token.right, DependedValue(if (assigmentComposition) null else variableTyped))
-
-            if (variable is VariableToken)
-                checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
-
-            if (value.complete){
-                writeInstruction(value)
-            } else if (token.operator.operator == "=") {
-                writeInstruction("set ${variable.getName()} #", value)
-                getVariable(variable.getName()).initialized = true
+                    )
+                )
             } else {
-                if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
-                    throw TranspileException("Unable to perform string concatenation in this version")
-
-                writeInstruction("op ${getOperationName(token.operator.operator)} ${variable.getName()} ${variable.getName()} #", value)
+                if (increment) TypedExpression("1", Types.NUMBER, false)
+                else transpileExpressionWithReference(token.right)
             }
-        } else
-            throw IllegalArgumentException()
+
+            checkType(value.type, fieldData.resultType)
+
+            writeInstruction("control ${field.field.word} ${from.value} ${value.value}")
+            return
+        }
+
+        // TypedToken for buffer operations
+        val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
+        val variableTyped = variable.getTyped(token.operator.operator == "=")
+
+        val value = if (increment) TypedExpression("1", Types.NUMBER, false)
+        else transpileExpressionWithReference(
+            token.right,
+            DependedValue(if (assigmentComposition) null else variableTyped)
+        )
+
+        if (variable is VariableToken)
+            checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
+
+        if (value.complete) {
+            writeInstruction(value)
+        } else if (token.operator.operator == "=") {
+            writeInstruction("set ${variable.getName()} #", value)
+            getVariable(variable.getName()).initialized = true
+        } else {
+            if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
+                throw TranspileException("Unable to perform string concatenation in this version")
+
+            writeInstruction(
+                "op ${getOperationName(token.operator.operator)} ${variable.getName()} ${variable.getName()} #",
+                value
+            )
+        }
     }
 
     private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: DependedValue = DependedValue(null)): TypedExpression {
@@ -239,6 +271,9 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         if (value is BooleanToken) return TypedExpression(if (value.value) "1" else "0", Types.BOOL, false)
         if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
         if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY, false)
+
+        if (value is CallToken)
+            return transpileCallToken(value, dependedVariable) ?: throw TranspileException("Function '${value.name.word}' doesn't return any value")
 
         if (value is BuildingToken) {
             checkVariable(value.name){ checkType(it.getTyped().type, Types.BUILDING) }
@@ -255,7 +290,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             return this.transpileFieldValue(value)
 
         if (value is OperationToken)
-            return this.transpileOperationChain(value, createBuffer(value)  /*TODO destroy*/, dependedVariable)
+            return this.transpileOperationChain(value, createBuffer(getReturnType(value))  /*TODO destroy*/, dependedVariable)
 
         throw IllegalArgumentException()
     }
@@ -265,15 +300,15 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         if(from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
 
         val field = BuildingFields.getField(token.field.word) ?: throw TranspileException("Unknown building property")
-        val buffer = TypedExpression(variableStack.requestBufferVariable(), field.resultType, false)
+        val buffer = createBuffer(field.resultType)
 
         writeInstruction("sensor ${buffer.value} ${from.value} @${field.actualName}")
 
         return buffer
     }
 
-    private fun createBuffer(value: OperationToken) =
-        TypedExpression(variableStack.requestBufferVariable(), getReturnType(value), false)
+    override fun createBuffer(type: Types) =
+        TypedExpression(variableStack.requestBufferVariable(), type, false)
 
     private fun transpileOperationChain(value: OperationToken, buffer: TypedExpression, dependedVariable: DependedValue, shortAssigmentPossible: Boolean = true): TypedExpression {
         if (value.isFlat()){
@@ -331,7 +366,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             val shortAssigment = isShortAssigmentPossible(value.left, value.right)
             val prepareBufferFunction: (TypedExpression, OperationToken) -> TypedExpression = { b, o ->
                 if (!b.compatible(TypedExpression("", getReturnType(o), false)))
-                    createBuffer(o)
+                    createBuffer(getReturnType(o))
                 else
                     b
             }
@@ -346,7 +381,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             val right: TypedExpression = if (value.right !is OperationToken) transpileExpressionWithReference(value.right)
                 else transpileOperationChain(
                     value.right as OperationToken,
-                    if (propagateLeft) createBuffer(value.right as OperationToken)
+                    if (propagateLeft) createBuffer(getReturnType(value.right as OperationToken))
                         else prepareBufferFunction.invoke(buffer, value.right as OperationToken),
                     DependedValue(null), shortAssigment
                 )
@@ -354,7 +389,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             val operationToken = OperationToken(value.operator, left.toToken(), right.toToken())
             return when (value.operator.operator) {
                 in OperatorToken.ASSIGMENT_INCREMENT_OPERATION -> {
-                    transpileOperationChain(operationToken, createBuffer(operationToken), DependedValue(left))
+                    transpileOperationChain(operationToken, createBuffer(getReturnType(operationToken)), DependedValue(left))
                 }
                 "!" -> {
                     transpileOperationChain(operationToken, buffer, dependedVariable)
