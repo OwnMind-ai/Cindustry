@@ -1,8 +1,8 @@
 use @message1;
-global bool x = @message1.enabled;
+global number x = 0;
 
 void main(){
-    @message1.color++;
+    x++;
 
     // Fizz Buzz (kinda)
     number n = 20;

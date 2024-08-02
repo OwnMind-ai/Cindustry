@@ -21,13 +21,20 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     fun transpile(): String{
         fileToken.globalVariables.forEach(::transpileInitialization)
 
+        val mainIndex = mainStream.size
         val main: FunctionDeclarationToken = fileToken.functions.find { it.name.word == "main" }
                 ?: throw TranspileException("No main function")
 
         variableStack.add(main.codeBlock, main)
         main.codeBlock.statements.forEach(this::transpileExecutableToken)
 
-        val firstId = mainStream[0].id
+        // If there are global variables,
+        // then cycling of the main function is replaced by artificial jump rather than natural processor cycling,
+        // so that global variables won't change after each cycle
+        if (mainIndex != 0)
+            writeJumpInstruction(JumpInstruction.createAlways(mainStream[mainIndex].id, nextId()))
+
+        val firstId = mainStream[mainIndex].id
         // Allows jumps for if statements to transpile properly if there is no following instruction
         nextIdPending.forEach {
             // Redirects jump to the start, as if the program ended after jump firing
