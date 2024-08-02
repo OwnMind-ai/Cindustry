@@ -189,13 +189,18 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         val parameters = token.parameters.map { transpileExpressionWithReference(it) }
 
         val function = functionRegistry.getFunctionData(token.name.word, parameters.map { it.type })
-                       ?: throw TranspileException("Function '${token.name}' is not defined")
+                       ?: throw TranspileException("Function '${token.name.word}' is not defined")
 
-        return if (function.transpilationFunction != null){
-            function.transpilationFunction.invoke(parameters, dependedVariable)
+        val result = if (function.transpilationFunction != null){
+            function.transpilationFunction.invoke(parameters.toTypedArray(), dependedVariable)
         } else {
             TODO()
         }
+
+        if (dependedVariable.variable != null)
+            checkType(dependedVariable.variable.type, function.returnType)
+
+        return result
     }
 
     private fun transpileOperationStatement(token: OperationToken) {
@@ -231,6 +236,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
 
             checkType(value.type, fieldData.resultType)
 
+            if (value.used) return
+
             writeInstruction("control ${field.field.word} ${from.value} ${value.value}")
             return
         }
@@ -248,11 +255,13 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         if (variable is VariableToken)
             checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
 
+        getVariable(variable.getName()).initialized = true
+        if (value.used) return
+
         if (value.complete) {
             writeInstruction(value)
         } else if (token.operator.operator == "=") {
             writeInstruction("set ${variable.getName()} #", value)
-            getVariable(variable.getName()).initialized = true
         } else {
             if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
                 throw TranspileException("Unable to perform string concatenation in this version")
@@ -481,6 +490,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
 
             checkType(variableStack.stack.last().getTyped(), value)
 
+            if (value.used) return
             if (value.complete)
                 writeInstruction(value)
             else

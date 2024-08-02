@@ -57,7 +57,7 @@ since we are unable to put incrementing instruction between addition instruction
 In that case, we use the first solution.
 Although it is much more expensive, this case is really rare.
 */
-data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: String? = null){
+data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: String? = null, var used: Boolean = false){
     fun compatible(other: TypedExpression): Boolean{
         return type.compatible(other.type)
     }

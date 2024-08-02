@@ -1,6 +1,4 @@
 use @message1;
-use @message2;
-use @cell1;
 
 void main(){
     // Fizz Buzz (kinda)
@@ -21,5 +19,4 @@ void main(){
     }
 
     print(o, @message1);
-    print(read(@cell1, 0), @message2);
 }

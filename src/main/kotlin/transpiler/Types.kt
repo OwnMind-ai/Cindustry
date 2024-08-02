@@ -28,7 +28,7 @@ enum class BuildingFields (val resultType: Types = Types.NUMBER, val mutable: Bo
 }
 
 enum class Types{
-    NUMBER, VOID, STRING, BUILDING, ANY, BOOL, CONTENT;
+    NUMBER, VOID, STRING, BUILDING, ANY, BOOL, CONTENT, UNIT;
 
     fun compatible(other: Types): Boolean{
         return other != VOID && this != VOID &&
