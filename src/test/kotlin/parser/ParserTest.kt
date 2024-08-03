@@ -15,6 +15,9 @@ class ParserTest {
             void main(){
                 @cell1[0];
                 number x = a++ * 4;
+                
+                for(;;)
+                    doCall();
 
                 for (x = 0; x < 4; x++) {
                     // Comment
@@ -44,6 +47,10 @@ class ParserTest {
                 ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
+                ForToken(
+                    null,null,null,
+                    CodeBlockToken(listOf(CallToken(WordToken("doCall"), listOf())))
+                ),
                 ForToken(
                     OperationToken(OperatorToken("="), VariableToken(WordToken("x")), NumberToken("0")),
                     OperationToken(OperatorToken("<"), VariableToken(WordToken("x")), NumberToken("4")),

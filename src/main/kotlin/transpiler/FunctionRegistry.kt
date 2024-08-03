@@ -38,9 +38,34 @@ data class FunctionData(
     }
 }
 
-@Suppress("SpellCheckingInspection")
+private fun addMathFunction(instructionManager: InstructionManager, registry: MutableList<FunctionData>, name: String, paramsNumber: Int = 2, actualName: String = name){
+    registry.add(FunctionData(name, List(paramsNumber) { Types.NUMBER }, Types.NUMBER, FunctionRegistry.STANDARD_PACKAGE) { params, dependedVariable ->
+        val variable = if (dependedVariable.variable != null){
+            dependedVariable.variable.used = true
+            dependedVariable.variable
+        } else
+            instructionManager.createBuffer(Types.NUMBER)
+
+        instructionManager.writeInstruction("op $actualName # # #", variable, params[0],
+            if (paramsNumber == 2) params[1] else TypedExpression("0", Types.NUMBER, false))
+        variable
+    })
+}
+
 private fun createStandardRegistry(instructionManager: InstructionManager): List<FunctionData> {
     val standard = LinkedList<FunctionData>()
+
+    // MATH FUNCTIONS
+    //TODO Move to separate 'math' package
+
+    listOf("pow", "max", "min", "angle", "angleDiff", "noise")
+        .forEach { addMathFunction(instructionManager, standard, it) }
+    listOf("abs", "log", "log10", "floor", "ceil", "sqrt", "rand", "sin", "cos", "tan", "asin", "acos", "atan")
+        .forEach { addMathFunction(instructionManager, standard, it, paramsNumber = 1) }
+
+    addMathFunction(instructionManager, standard, "intDiv", 2, "idiv")
+    addMathFunction(instructionManager, standard, "vectorLen", 2, "len")
+    addMathFunction(instructionManager, standard, "flip", 1, "not")
 
     // MINDUSTRY FUNCTIONS
     standard.add(FunctionData("print", listOf(Types.ANY), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
@@ -168,6 +193,16 @@ private fun createStandardRegistry(instructionManager: InstructionManager): List
             instructionManager.writeInstruction("getlink # #", buffer, *params)
             buffer
         }
+    })
+
+    standard.add(FunctionData("wait", listOf(Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("wait #", *params)
+        null
+    })
+
+    standard.add(FunctionData("stop", listOf(), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("stop", *params)
+        null
     })
 
     return standard

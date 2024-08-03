@@ -7,14 +7,13 @@ void main(){
     number n = 20;
     number o = 0;
 
-    for(number i = 0; i < 4; i++){
+    for(number i = 0; i < 4; i++)
         @cell1[i] = 0;
-    }
 
     for(number i = 0; i < n; i++){
         if(i % 3 == 0 && i % 5 == 0){
             @cell1[0] += 1;
-            o += 1000000;
+            o += pow(10, 6);
         } else if (i % 3 == 0) {
             @cell1[1] = @cell1[1] + 1;
             o += 10000;
@@ -23,7 +22,7 @@ void main(){
             o += 100;
         } else {
             number h = @cell1[3]++;
-            o += i;
+            o += 1;
         }
     }
 
@@ -37,4 +36,6 @@ void main(){
     print(" ");
     print(@cell1[3]);
     printFlush(@message2);
+
+    stop();
 }
