@@ -291,6 +291,7 @@ class Parser(private val lexer: Lexer) {
         val result: MutableList<T> = ArrayList()
         lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == start }
 
+        var endSkipped = false
         while (lexer.peek() !is PunctuationToken || (lexer.peek() as PunctuationToken).character != end){
             val element = parser.invoke()
             result.add(element)
@@ -301,11 +302,14 @@ class Parser(private val lexer: Lexer) {
                 val next = lexer.strictNext<PunctuationToken>()
                 next.assert { it is PunctuationToken && (it.character == separator || it.character == end) }
 
-                if (next.character == end) break
+                if (next.character == end) {
+                    endSkipped = true
+                    break
+                }
             }
         }
 
-        if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == end)
+        if (!endSkipped && lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == end)
             lexer.next()
 
         return result
