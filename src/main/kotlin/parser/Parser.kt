@@ -84,7 +84,7 @@ class Parser(private val lexer: Lexer) {
 
                 return buildExpressionTree(OperationToken(operator, token, right), currentPriority)
             }
-        } else if (token is ExpressionToken && next is PunctuationToken && next.character == "."){
+        } else if (token is ExpressionToken && (next as? PunctuationToken)?.character == "."){
             lexer.strictNext<PunctuationToken>()
             val field = lexer.strictNext<WordToken>()
             field.assertNotKeyword()
@@ -93,7 +93,8 @@ class Parser(private val lexer: Lexer) {
                 throw ParserException("Unable to access field '${field.word}'")
 
             return buildExpressionTree(FieldAccessToken(token, field), 0)
-        }
+        } else if (token is ExpressionToken && (lexer.peek() as? PunctuationToken)?.character == "[")
+            return buildExpressionTree(parseArrayAccess(token), 0)
 
         return token
     }
@@ -179,6 +180,14 @@ class Parser(private val lexer: Lexer) {
             return this.parseCall(token)
 
         return VariableToken(token)
+    }
+
+    private fun parseArrayAccess(token: ExpressionToken): ArrayAccessToken {
+        lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == "[" }
+        val index = this.parseExpression() as? ExpressionToken ?: throw ParserException("Invalid array index")
+        lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == "]" }
+
+        return ArrayAccessToken(token, index)
     }
 
     private fun parseIf(): IfToken {

@@ -28,7 +28,8 @@ class Lexer(private val stream: CharStream) {
 
     inline fun <reified T: Token> strictNext(): T {
         val token = next()
-        if (token !is T) throw ParserException("Unexpected token")
+        if (token !is T)
+            throw ParserException("Unexpected token")
 
         return token
     }

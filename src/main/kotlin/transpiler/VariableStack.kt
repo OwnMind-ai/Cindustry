@@ -57,8 +57,26 @@ since we are unable to put incrementing instruction between addition instruction
 In that case, we use the first solution.
 Although it is much more expensive, this case is really rare.
 */
-data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: String? = null, var used: Boolean = false){
+data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: Array<String>? = null, var used: Boolean = false){
     fun compatible(other: TypedExpression): Boolean{
         return type.compatible(other.type)
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TypedExpression
+
+        if (value != other.value) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = value.hashCode()
+        result = 31 * result + type.hashCode()
+        return result
     }
 }

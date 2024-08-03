@@ -1,22 +1,40 @@
 use @message1;
+use @message2;
+use @cell1;
 
 void main(){
     // Fizz Buzz (kinda)
     number n = 20;
     number o = 0;
-    number i;
 
-    for(i = 0; i < n; i++){
+    for(number i = 0; i < 4; i++){
+        @cell1[i] = 0;
+    }
+
+    for(number i = 0; i < n; i++){
         if(i % 3 == 0 && i % 5 == 0){
+            @cell1[0] += 1;
             o += 1000000;
         } else if (i % 3 == 0) {
+            @cell1[1] = @cell1[1] + 1;
             o += 10000;
         } else if (i % 5 == 0){
+            @cell1[2]++;
             o += 100;
         } else {
+            number h = @cell1[3]++;
             o += i;
         }
     }
 
     print(o, @message1);
+
+    print(@cell1[0]);
+    print(" ");
+    print(@cell1[1]);
+    print(" ");
+    print(@cell1[2]);
+    print(" ");
+    print(@cell1[3]);
+    printFlush(@message2);
 }

@@ -38,7 +38,7 @@ data class OperatorToken(
     var operator: String
 ) : Token {
     companion object{
-        val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=")
+        val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=", "%=")
         val ASSIGMENT_INCREMENT_OPERATION: MutableList<String> = mutableListOf("++", "--")
         val LOGIC_OPERATION: List<String> = listOf("||", "|", "&&", "&", ">", "<", "==", "===", ">=", "<=")
 
@@ -119,6 +119,11 @@ data class OperationToken(
         return left !is OperationToken && left !is CallToken && right !is OperationToken && right !is CallToken
     }
 }
+
+data class ArrayAccessToken(
+    var array: ExpressionToken,
+    var index: ExpressionToken
+) : ExpressionToken, AssignableToken
 
 data class FieldAccessToken(
     var from: ExpressionToken,

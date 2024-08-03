@@ -13,6 +13,7 @@ class ParserTest {
             global number a;
             
             void main(){
+                @cell1[0];
                 number x = a++ * 4;
 
                 for (x = 0; x < 4; x++) {
@@ -40,6 +41,7 @@ class ParserTest {
             ),
             listOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
+                ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
                 ForToken(
