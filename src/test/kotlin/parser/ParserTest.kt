@@ -31,7 +31,8 @@ class ParserTest {
                 }
             }
             
-            number foo(number a, number b){
+            number foo(const number a, number b, number c){
+                b++; 
             }
         """.trimIndent()
 
@@ -79,8 +80,14 @@ class ParserTest {
             ))),
 
             FunctionDeclarationToken(WordToken("foo"), WordToken("number"),
-                listOf(ParameterToken(WordToken("number"), WordToken("a")),ParameterToken(WordToken("number"), WordToken("b"))),
-                CodeBlockToken(listOf()))
+                listOf(
+                    ParameterToken(WordToken("number"), WordToken("a"), true),
+                    ParameterToken(WordToken("number"), WordToken("b"), false),
+                    ParameterToken(WordToken("number"), WordToken("c"), true)
+                ),
+                CodeBlockToken(listOf(
+                    OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide())
+                )))
         )).toString(), parser.parse().toString())
     }
 }

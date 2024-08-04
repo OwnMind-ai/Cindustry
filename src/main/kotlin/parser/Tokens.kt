@@ -14,7 +14,7 @@ data class WordToken(
 ) : Token {
     companion object{
         val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
-        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global")
+        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as")
     }
 
     fun assertTypeKeyword() {
@@ -91,7 +91,10 @@ data class BuildingToken(
 
 interface ExecutableToken : Token
 interface ExpressionToken : ExecutableToken
-interface BlockToken
+interface BlockToken{
+    fun getAllExecutableTokens(): List<ExecutableToken>
+}
+
 interface AssignableToken
 
 data class CodeBlockToken(
@@ -151,20 +154,38 @@ data class IfToken(
     var condition: ExpressionToken,
     var doBlock: CodeBlockToken,
     var elseBlock: CodeBlockToken?
-) : ExecutableToken, BlockToken
+) : ExecutableToken, BlockToken {
+    override fun getAllExecutableTokens(): List<ExecutableToken> {
+        return doBlock.statements + (elseBlock?.statements ?: listOf())
+    }
+}
 
 data class WhileToken(
     var condition: ExpressionToken,
     var doBlock: CodeBlockToken,
     var isDoWhile: Boolean
-) : ExecutableToken, BlockToken
+) : ExecutableToken, BlockToken {
+    override fun getAllExecutableTokens(): List<ExecutableToken> {
+        return doBlock.statements + condition
+    }
+}
 
 data class ForToken(
     var initialization: ExecutableToken?,
     var condition: ExpressionToken?,
     var after: ExecutableToken?,
     var doBlock: CodeBlockToken
-) : ExecutableToken, BlockToken
+) : ExecutableToken, BlockToken{
+    override fun getAllExecutableTokens(): List<ExecutableToken> {
+        val result = ArrayList(doBlock.statements)
+        if (initialization != null) result.add(initialization)
+        if (condition != null) result.add(condition)
+        if (after != null) result.add(after)
+
+        return result
+    }
+
+}
 
 data class ReturnToken(
     var type: WordToken,
@@ -179,7 +200,8 @@ data class ReturnToken(
 
 data class ParameterToken(
     var type: WordToken,
-    var name: WordToken
+    var name: WordToken,
+    var const: Boolean? = null
 ) : Token
 
 data class FunctionDeclarationToken(
@@ -187,7 +209,11 @@ data class FunctionDeclarationToken(
     var returnType: WordToken,
     var parameters: List<ParameterToken>,
     var codeBlock: CodeBlockToken
-) : Token, BlockToken
+) : Token, BlockToken {
+    override fun getAllExecutableTokens(): List<ExecutableToken> {
+        return codeBlock.statements
+    }
+}
 
 data class FileToken(
     var globalVariables: List<InitializationToken>,

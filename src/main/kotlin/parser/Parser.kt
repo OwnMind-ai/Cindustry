@@ -1,5 +1,7 @@
 package org.cindustry.parser
 
+import java.util.*
+
 class Parser(private val lexer: Lexer) {
     fun parse(): FileToken{
         val globalVariables = ArrayList<InitializationToken>()
@@ -34,6 +36,8 @@ class Parser(private val lexer: Lexer) {
         val name = lexer.strictNext<WordToken>()
         val parameters = parseParameters()
         val code = parseCodeBlock()
+
+        evaluateParametersMutability(parameters, code)
 
         return FunctionDeclarationToken(name, returnType, parameters, code)
     }
@@ -279,12 +283,60 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseParameter(): ParameterToken {
+        val const = (lexer.peek() as? WordToken)?.word == "const"
+        if(const) lexer.next()
+
         val type = lexer.strictNext<WordToken>()
         type.assertTypeKeyword()
 
         val name = lexer.strictNext<WordToken>()
 
-        return ParameterToken(type, name)
+        return ParameterToken(type, name, if(const) true else null)
+    }
+
+    private fun evaluateParametersMutability(parameters: List<ParameterToken>, code: CodeBlockToken) {
+        code.statements.forEach { s ->
+            val nextFunction: (Token) -> List<Token> = { t ->
+               when (t) {
+                   is OperationToken -> listOf(t.left, t.right)
+                   is CallToken -> t.parameters
+                   is ArrayAccessToken -> listOf(t.array, t.index)
+                   is FieldAccessToken -> listOf(t.from)
+                   is BlockToken -> t.getAllExecutableTokens()
+                   is CodeBlockToken -> t.statements
+                   is InitializationToken -> if (t.value != null) listOf(t.value!!) else listOf()
+                   is ReturnToken -> if (t.value != null) listOf(t.value!!) else listOf()
+                   else -> listOf()
+               }
+            }
+
+            executeDeep(s, nextFunction) {
+                if (it is OperationToken && it.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION){
+                    val param = if (it.left is VariableToken)
+                            parameters.find { p -> p.name.word == (it.left as VariableToken).getName() }
+                        else if (it.right is VariableToken)
+                            parameters.find { p -> p.name.word == (it.right as VariableToken).getName() }
+                        else
+                            throw IllegalArgumentException()
+
+                    if (param?.const == true)
+                        throw ParserException("Constant modified")
+
+                    param?.const = false
+                }
+            }
+        }
+
+        parameters.filter { it.const == null }.forEach{ it.const = true }
+    }
+
+    private fun <T> executeDeep(token: T, next: (T) -> List<T>, execute: (T) -> Unit){
+        execute.invoke(token)
+
+        val list = next.invoke(token).filter(Objects::nonNull)
+        if (list.isEmpty()) return
+
+        list.forEach { executeDeep(it, next, execute) }
     }
 
     private fun <T: Token?> delimiter(start: String, separator: String, end: String, parser: () -> T, separatorIgnorePredicate: (T) -> Boolean = { false }): List<T>{
