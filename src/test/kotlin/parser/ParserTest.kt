@@ -10,10 +10,11 @@ class ParserTest {
     fun parse() {
         val file = """
             use @message1; 
-            global number a;
+            global const number a;
             
             void main(){
                 @cell1[0];
+                const number g = 100;
                 number x = a++ * 4;
                 
                 for(;;)
@@ -41,11 +42,12 @@ class ParserTest {
         assertEquals(FileToken(
             listOf(
                 InitializationToken(WordToken("building"), WordToken("message1"), BuildingToken("message1")),
-                InitializationToken(WordToken("a"), WordToken("number"), null)
+                InitializationToken(WordToken("a"), WordToken("number"), null, true)
             ),
             listOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
                 ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
+                InitializationToken(WordToken("number"), WordToken("g"), NumberToken("100"), const = true),
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
                 ForToken(

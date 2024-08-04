@@ -269,8 +269,11 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             DependedValue(if (assigmentComposition) null else variableTyped)
         )
 
-        if (variable is VariableToken)
+        if (variable is VariableToken) {
             checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
+            if (getVariable(variable.getName()).constant)
+                throw TranspileException("Variable '${variable.getName()}' is constant")
+        }
 
         getVariable(variable.getName()).initialized = true
         if (value.used) return
@@ -544,7 +547,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             throw TranspileException("Variable '${token.name.word}' already exists in this scope")
 
         variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word,
-            variableStack.blockStack.lastOrNull()?.block, token.value != null))
+            variableStack.blockStack.lastOrNull()?.block, token.value != null, token.const))
 
         if (token.value != null && token.value !is BuildingToken) {
             val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(token.name.word).getTyped()))
@@ -556,7 +559,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
                 writeInstruction(value)
             else
                 writeInstruction("set ${token.name.word} #", value)
-        }
+        } else if (token.const)
+            throw TranspileException("Constant variables must be initialized")
     }
 
     override fun nextId(): Int{

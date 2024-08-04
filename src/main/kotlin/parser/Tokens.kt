@@ -104,7 +104,8 @@ data class CodeBlockToken(
 data class InitializationToken(
     var type: WordToken,
     var name: WordToken,
-    var value: ExpressionToken?
+    var value: ExpressionToken?,
+    var const: Boolean = false
 ) : ExecutableToken
 
 data class OperationToken(

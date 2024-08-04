@@ -4,7 +4,7 @@ use @cell1;
 
 void main(){
     // Fizz Buzz (kinda)
-    number n = 20;
+    const number n = 20;
     number o = 0;
 
     for(number i = 0; i < 4; i++)

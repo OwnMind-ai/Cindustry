@@ -152,7 +152,7 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseWordToken(current: WordToken): ExecutableToken {
-        if (WordToken.TYPES.contains(current.word))
+        if (WordToken.TYPES.contains(current.word) || current.word == "const")
             return this.parseInitialization()
 
         if (current.word == "true" || current.word == "false")
@@ -263,6 +263,9 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseInitialization(): InitializationToken {
+        val const = (lexer.peek() as? WordToken)?.word == "const"
+        if(const) lexer.next()
+
         val type = lexer.strictNext<WordToken>()
         val name = lexer.strictNext<WordToken>()
         var value: ExecutableToken? = null
@@ -275,7 +278,7 @@ class Parser(private val lexer: Lexer) {
                 throw ParserException("Invalid token, expression was expected")
         }
 
-        return InitializationToken(type, name, value as ExpressionToken?)
+        return InitializationToken(type, name, value as ExpressionToken?, const)
     }
 
     private fun parseParameters(): List<ParameterToken> {
@@ -296,28 +299,14 @@ class Parser(private val lexer: Lexer) {
 
     private fun evaluateParametersMutability(parameters: List<ParameterToken>, code: CodeBlockToken) {
         code.statements.forEach { s ->
-            val nextFunction: (Token) -> List<Token> = { t ->
-               when (t) {
-                   is OperationToken -> listOf(t.left, t.right)
-                   is CallToken -> t.parameters
-                   is ArrayAccessToken -> listOf(t.array, t.index)
-                   is FieldAccessToken -> listOf(t.from)
-                   is BlockToken -> t.getAllExecutableTokens()
-                   is CodeBlockToken -> t.statements
-                   is InitializationToken -> if (t.value != null) listOf(t.value!!) else listOf()
-                   is ReturnToken -> if (t.value != null) listOf(t.value!!) else listOf()
-                   else -> listOf()
-               }
-            }
-
-            executeDeep(s, nextFunction) {
+            executeDeep(s, ::nextChildToken) {
                 if (it is OperationToken && it.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION){
                     val param = if (it.left is VariableToken)
                             parameters.find { p -> p.name.word == (it.left as VariableToken).getName() }
                         else if (it.right is VariableToken)
                             parameters.find { p -> p.name.word == (it.right as VariableToken).getName() }
                         else
-                            throw IllegalArgumentException()
+                            return@executeDeep
 
                     if (param?.const == true)
                         throw ParserException("Constant modified")
@@ -328,6 +317,18 @@ class Parser(private val lexer: Lexer) {
         }
 
         parameters.filter { it.const == null }.forEach{ it.const = true }
+    }
+
+    private fun nextChildToken(t: Token) = when (t) {
+        is OperationToken -> listOf(t.left, t.right)
+        is CallToken -> t.parameters
+        is ArrayAccessToken -> listOf(t.array, t.index)
+        is FieldAccessToken -> listOf(t.from)
+        is BlockToken -> t.getAllExecutableTokens()
+        is CodeBlockToken -> t.statements
+        is InitializationToken -> if (t.value != null) listOf(t.value!!) else listOf()
+        is ReturnToken -> if (t.value != null) listOf(t.value!!) else listOf()
+        else -> listOf()
     }
 
     private fun <T> executeDeep(token: T, next: (T) -> List<T>, execute: (T) -> Unit){
