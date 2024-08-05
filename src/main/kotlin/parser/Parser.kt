@@ -158,7 +158,7 @@ class Parser(private val lexer: Lexer) {
         if (current.word == "true" || current.word == "false")
             return BooleanToken(lexer.strictNext<WordToken>().word == "true")
 
-        if (listOf(ReturnToken.RETURN, ReturnToken.BREAK, ReturnToken.CONTINUE).contains(current.word)) {
+        if (current.word in listOf(ReturnToken.RETURN, ReturnToken.BREAK, ReturnToken.CONTINUE)) {
             return ReturnToken(
                 lexer.strictNext(),
                 if (lexer.peek() is PunctuationToken) {
@@ -168,7 +168,7 @@ class Parser(private val lexer: Lexer) {
                     if (expression !is ExpressionToken)
                         throw ParserException("Invalid token, expression was expected")
 
-                    return expression
+                    expression
                 }
             )
         }

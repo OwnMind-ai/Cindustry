@@ -8,7 +8,7 @@ import java.util.*
 class VariableStack {
     val stack: LinkedList<VariableData> = LinkedList()
     val blockStack: LinkedList<Scope> = LinkedList()
-    val returnStack: Map<TypedExpression, Scope> = HashMap()
+    val returnStack: MutableMap<TypedExpression, Scope> = HashMap()
 
     init {
         blockStack.add(Scope(null, null, 0, 0, "main"))  // File scope

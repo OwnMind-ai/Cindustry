@@ -33,7 +33,7 @@ class ParserTest {
             }
             
             number foo(const number a, number b, number c){
-                b++; 
+                return b++; 
             }
         """.trimIndent()
 
@@ -88,7 +88,7 @@ class ParserTest {
                     ParameterToken(WordToken("number"), WordToken("c"), true)
                 ),
                 CodeBlockToken(listOf(
-                    OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide())
+                    ReturnToken(WordToken("return"), OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide()))
                 )))
         )).toString(), parser.parse().toString())
     }

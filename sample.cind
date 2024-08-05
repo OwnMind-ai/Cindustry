@@ -11,7 +11,7 @@ void main(){
         @cell1[i] = 0;
 
     for(number i = 0; i < n; i++){
-        if(i % 3 == 0 && i % 5 == 0){
+        if(isBoth(i)){
             @cell1[0] += 1;
             o += pow(10, 6);
         } else if (i % 3 == 0) {
@@ -28,6 +28,10 @@ void main(){
 
     print(o, @message1);
     printCell(4, ", ", @cell1, @message2);
+}
+
+bool isBoth(number i){
+    return i % 3 == 0 && i % 5 == 0;
 }
 
 void printCell(number n, string delimiter, building cell, building message){

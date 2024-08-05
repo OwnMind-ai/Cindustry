@@ -74,12 +74,21 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
 
     private fun transpileReturn(token: ReturnToken) {
         if (token.type.word == "return"){
-            val function = variableStack.blockStack.findLast { it.parentToken is FunctionDeclarationToken }!!
-                    .parentToken as FunctionDeclarationToken
+            val scope = variableStack.blockStack.findLast { it.parentToken is FunctionDeclarationToken }!!
+            val function = scope.parentToken as FunctionDeclarationToken
 
-            if (function.name.word != "main") TODO()
+            if (function.name.word != "main") {
+                if (token.value != null){
+                    val result = transpileExpressionWithReference(token.value!!)
+                    variableStack.returnStack[result] = scope
+                }
 
-            writeInstruction("end")
+                val jump = JumpInstruction.createAlways(-1, nextId())
+                writeJumpInstruction(jump)
+
+                jumpIdPending[function]!!.add(Pair( AFTER_BLOCK_END, jump))
+            } else
+                writeInstruction("end")
         } else {
             val loop = variableStack.blockStack.findLast { it.parentToken is ForToken || it.parentToken is WhileToken }
                 ?.parentToken
@@ -192,6 +201,9 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     private fun transpileCallToken(
         token: CallToken, dependedVariable: DependedValue = DependedValue(null)
     ): TypedExpression? {
+        if (token.name.word == getFunctionScope())
+            throw TranspileException("Recursions are not allowed in this version")
+
         val parameters = token.parameters.map { transpileExpressionWithReference(it) }
 
         val function = functionRegistry.getFunctionData(token.name.word, parameters.map { it.type })
@@ -209,14 +221,23 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
                 transpileInitialization(initialization)
             }
 
+            jumpIdPending[function.token] = ArrayList()
             function.token.codeBlock.statements.forEach(::transpileExecutableToken)
 
             variableStack.remove(function.token.codeBlock)
 
+            jumpIdPending.remove(function.token)!!.forEach {  when(it.first){
+                AFTER_BLOCK_END -> awaitNextId { i -> it.second.jumpToId = i }
+                else -> throw IllegalArgumentException()
+            } }
+
             if (function.returnType == Types.VOID)
                 null
-            else
-                TODO()
+            else{
+                val result = variableStack.returnStack.filterValues { it.parentToken == function.token }.keys.first()
+                variableStack.returnStack.remove(result)
+                result
+            }
         }
 
         if (dependedVariable.variable != null)
@@ -330,7 +351,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             ,)!!
 
         if (value is CallToken)
-            return transpileCallToken(value, dependedVariable) ?: throw TranspileException("Function '${value.name.word}' doesn't return any value")
+            return transpileCallToken(value, dependedVariable)
+                ?: throw TranspileException("Function '${value.name.word}' doesn't return any value")
 
         if (value is BuildingToken) {
             checkVariable(value.name){ checkType(it.getTyped().type, Types.BUILDING) }
