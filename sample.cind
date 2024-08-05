@@ -27,15 +27,15 @@ void main(){
     }
 
     print(o, @message1);
+    printCell(4, ", ", @cell1, @message2);
+}
 
-    print(@cell1[0]);
-    print(" ");
-    print(@cell1[1]);
-    print(" ");
-    print(@cell1[2]);
-    print(" ");
-    print(@cell1[3]);
-    printFlush(@message2);
+void printCell(number n, string delimiter, building cell, building message){
+    for(number i = 0; i < n; i++){
+        print(cell[i]);
+        if(i + 1 != n)
+            print(delimiter);
+    }
 
-    stop();
+    printFlush(message);
 }

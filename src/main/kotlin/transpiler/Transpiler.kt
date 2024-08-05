@@ -23,6 +23,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     fun transpile(): String{
         fileToken.globalVariables.forEach(::transpileInitialization)
 
+        registerFunctions(fileToken.functions.filter { it.name.word != "main" })
+
         val mainIndex = mainStream.size
         val main: FunctionDeclarationToken = fileToken.functions.find { it.name.word == "main" }
                 ?: throw TranspileException("No main function")
@@ -44,6 +46,10 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         }
 
         return mainStream.joinToString("\n") { it.getCode(::getInstructionIndex) }
+    }
+
+    private fun registerFunctions(functions: List<FunctionDeclarationToken>) {
+        functions.forEach(functionRegistry::add)
     }
 
     private fun getInstructionIndex(id: Int): Int {
@@ -194,7 +200,23 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         val result = if (function.transpilationFunction != null){
             function.transpilationFunction.invoke(parameters.toTypedArray(), dependedVariable)
         } else {
-            TODO()
+            variableStack.add(function.token!!.codeBlock, function.token)
+
+            // TODO optimize for constants
+            parameters.forEachIndexed { i, param ->
+                val parameter = function.token.parameters[i]
+                val initialization = InitializationToken(parameter.type, parameter.name, param.toToken(), parameter.const ?: false)
+                transpileInitialization(initialization)
+            }
+
+            function.token.codeBlock.statements.forEach(::transpileExecutableToken)
+
+            variableStack.remove(function.token.codeBlock)
+
+            if (function.returnType == Types.VOID)
+                null
+            else
+                TODO()
         }
 
         if (dependedVariable.variable != null)
@@ -269,25 +291,26 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             DependedValue(if (assigmentComposition) null else variableTyped)
         )
 
-        if (variable is VariableToken) {
-            checkVariable(variable.getName()) { checkType(it.getTyped(token.operator.operator == "="), value) }
-            if (getVariable(variable.getName()).constant)
-                throw TranspileException("Variable '${variable.getName()}' is constant")
-        }
+        if (variable is VariableToken)
+            checkVariable(variable.getName()) {
+                checkType(it.getTyped(token.operator.operator == "="), value)
+                if (it.constant)
+                    throw TranspileException("Variable '${variable.getName()}' is constant")
+            }
 
-        getVariable(variable.getName()).initialized = true
+        getVariable(variableTyped.value).initialized = true
         if (value.used) return
 
         if (value.complete) {
             writeInstruction(value)
         } else if (token.operator.operator == "=") {
-            writeInstruction("set ${variable.getName()} #", value)
+            writeInstruction("set ${variableTyped.value} #", value)
         } else {
             if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
                 throw TranspileException("Unable to perform string concatenation in this version")
 
             writeInstruction(
-                "op ${getOperationName(token.operator.operator)} ${variable.getName()} ${variable.getName()} #",
+                "op ${getOperationName(token.operator.operator)} ${variableTyped.value} ${variableTyped.value} #",
                 value
             )
         }
@@ -391,9 +414,10 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
                 val variable = (if (incremental) value.right else value.left) as NamedToken
                 val valueToken = if (incremental) NumberToken("1") else value.right
 
+                val typed = variable.getTyped()
                 if (shortAssigmentPossible) {
                     transpileExpression(value)
-                    return variable.getTyped()
+                    return typed
                 } else {
                     //TODO add warning maybe?
                     // If user actually invoked this (shortAssigmentPossible is false) inefficient black magic,
@@ -401,23 +425,23 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
                     // By the way, there are A LOT of room of improvement (specifically in this code block),
                     // however it is really rare case,
                     // so why bother, considering how toy this language is
-                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), variable.getTyped().type, false)
+                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), typed.type, false)
                     val valueTokenResult = this.transpileExpressionWithReference(valueToken)
 
-                    writeInstruction("op ${getOperationName(value.operator.operator)} ${operationBuffer.value} ${variable.getName()} #", valueTokenResult)
-                    writeInstruction("set ${variable.getName()} ${operationBuffer.value}")
+                    writeInstruction("op ${getOperationName(value.operator.operator)} ${operationBuffer.value} ${typed.value} #", valueTokenResult)
+                    writeInstruction("set ${typed.value} ${operationBuffer.value}")
 
                     return operationBuffer
                 }
             } else if (incremental) {
-                val variableToken = getVariable((value.left as VariableToken).name.word).getTyped()
+                val variableTyped = (value.left as VariableToken).getTyped(false)
                 if (shortAssigmentPossible) {
-                    variableToken.addAfter = arrayOf("op ${getOperationName(value.operator.operator)} ${variableToken.value} ${variableToken.value} 1")
-                    return variableToken
+                    variableTyped.addAfter = arrayOf("op ${getOperationName(value.operator.operator)} ${variableTyped.value} ${variableTyped.value} 1")
+                    return variableTyped
                 } else {
-                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), variableToken.type, false)
-                    writeInstruction("set ${operationBuffer.value} ${variableToken.value}")
-                    writeInstruction("op ${getOperationName(value.operator.operator)} ${variableToken.value} ${variableToken.value} 1")
+                    val operationBuffer = TypedExpression(variableStack.requestBufferVariable(), variableTyped.type, false)
+                    writeInstruction("set ${operationBuffer.value} ${variableTyped.value}")
+                    writeInstruction("op ${getOperationName(value.operator.operator)} ${variableTyped.value} ${variableTyped.value} 1")
 
                     return operationBuffer
                 }
@@ -502,7 +526,7 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             if (getReturnType(value) !in listOf(Types.BOOL, Types.ANY))
                 throw TranspileException("Invalid condition type ${getReturnType(value).name}")
 
-            // Although it is not really a complete expression, it is assumed tht it always comes with jump instruction
+            // Although it is not really a complete expression, it is assumed that it always comes with jump instruction
             return TypedExpression("${getOperationName(operation)} ${left.value} ${right.value}", Types.BOOL, true)
         } else if (dependedVariable.variable != null) {
             checkType(dependedVariable.variable, TypedExpression("", getReturnType(value), false))
@@ -534,23 +558,30 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             throw TranspileException("Type '${first.name.lowercase()}' is not compatible with type '${second.name.lowercase()}'")
     }
 
-    private fun checkVariable(name: String, ifFound: (VariableStack.VariableData) -> Unit = { }) {
-        ifFound(getVariable(name))
-
+    private fun checkVariable(name: String, ifFound: (VariableData) -> Unit = { }) {
+        ifFound(getVariable(if (name.startsWith("_")) name
+            else VariableData.variableName(getFunctionScope(), name)))
     }
 
-    private fun getVariable(name: String) =
-        variableStack.stack.find { it.name == name } ?: throw TranspileException("Variable '$name' is not defined")
+    private fun getVariable(name: String): VariableData {
+        val functionScope = getFunctionScope()
+        return variableStack.stack.filter { it.scope?.functionScope == functionScope }.find { it.name() == name}
+            ?: throw TranspileException("Variable '$name' is not defined in this scope")
+    }
 
     private fun transpileInitialization(token: InitializationToken) {
-        if(variableStack.stack.any{ it.name == token.name.word })
+        val data = VariableData(
+            token.name.word, token.type.word,
+            variableStack.blockStack.lastOrNull(), token.value != null, token.const)
+
+        val functionScope = getFunctionScope()
+        if(variableStack.stack.filter { it.scope?.functionScope == functionScope }.any{ it.name() == data.name() })
             throw TranspileException("Variable '${token.name.word}' already exists in this scope")
 
-        variableStack.stack.add(VariableStack.VariableData(token.name.word, token.type.word,
-            variableStack.blockStack.lastOrNull()?.block, token.value != null, token.const))
+        variableStack.stack.add(data)
 
         if (token.value != null && token.value !is BuildingToken) {
-            val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(token.name.word).getTyped()))
+            val value = transpileExpressionWithReference(token.value!!, DependedValue(getVariable(data.name()).getTyped()))
 
             checkType(variableStack.stack.last().getTyped(), value)
 
@@ -558,10 +589,12 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
             if (value.complete)
                 writeInstruction(value)
             else
-                writeInstruction("set ${token.name.word} #", value)
+                writeInstruction("set ${data.name()} #", value)
         } else if (token.const)
             throw TranspileException("Constant variables must be initialized")
     }
+
+    private fun getFunctionScope() = variableStack.blockStack.last().functionScope
 
     override fun nextId(): Int{
         return counter++
@@ -661,8 +694,11 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     }
 
     private fun NamedToken.getTyped(ignoreInitialization: Boolean = false): TypedExpression{
-        return if (this is TypedToken) this.value
-               else getVariable(this.getName()).getTyped(ignoreInitialization)
+        return when (this) {
+            is TypedToken -> this.value
+            is VariableToken -> getVariable(VariableData.variableName(getFunctionScope(), this.getName())).getTyped(ignoreInitialization)
+            else -> getVariable(this.getName()).getTyped(ignoreInitialization)
+        }
     }
 
     private fun TypedExpression.toToken(): TypedToken {

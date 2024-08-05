@@ -2,19 +2,22 @@ package org.cindustry.transpiler
 
 import org.cindustry.parser.BlockToken
 import org.cindustry.parser.CodeBlockToken
+import org.cindustry.parser.FunctionDeclarationToken
 import java.util.*
 
 class VariableStack {
     val stack: LinkedList<VariableData> = LinkedList()
     val blockStack: LinkedList<Scope> = LinkedList()
+    val returnStack: Map<TypedExpression, Scope> = HashMap()
 
     init {
-        blockStack.add(Scope(null, null, 0, 0))  // File scope
+        blockStack.add(Scope(null, null, 0, 0, "main"))  // File scope
     }
 
     fun add(block: CodeBlockToken, parent: BlockToken){
-        val id = blockStack.last().id
-        blockStack.add(Scope(block, parent, id + 1, 0))
+        val last = blockStack.last()
+        blockStack.add(Scope(block, parent, last.id + 1, 0,
+            if (parent is FunctionDeclarationToken) parent.name.word else last.functionScope))
     }
 
     fun requestBufferVariable(): String {
@@ -28,20 +31,46 @@ class VariableStack {
         if (removed.block != block)
             throw IllegalStateException()  // TODO Change to InternalParserException
 
-        stack.removeIf { it.codeBlock == removed.block }
-    }
-
-    data class VariableData(val name: String, val type: String, val codeBlock: CodeBlockToken?, var initialized: Boolean, var constant: Boolean){
-        fun getTyped(ignoreInitialization: Boolean = false): TypedExpression{
-            if (!ignoreInitialization && !initialized)
-                throw TranspileException("Variable '$name' is not initialized")
-
-            return TypedExpression(name, Types.valueOf(type.uppercase()), false)
-        }
+        stack.removeIf { it.scope?.block == removed.block }
     }
 }
 
-data class Scope(val block: CodeBlockToken?, val parentToken: BlockToken?, val id: Int, var bufferCount: Int)
+data class VariableData(
+    val actualName: String,
+    val type: String,
+    val scope: Scope?,
+    var initialized: Boolean,
+    var constant: Boolean
+){
+    companion object{
+        fun variableName(scope: String?, actualName: String): String {
+            if (scope == "main" || scope == null)
+                return actualName
+
+            return "_${scope}_$actualName"   //TODO fix, breaks by overloaded functions
+        }
+
+    }
+
+    fun name(): String{
+        return variableName(scope?.functionScope, actualName)
+    }
+
+    fun getTyped(ignoreInitialization: Boolean = false): TypedExpression{
+        if (!ignoreInitialization && !initialized)
+            throw TranspileException("Variable '$actualName' is not initialized")
+
+        return TypedExpression(name(), Types.valueOf(type.uppercase()), false)
+    }
+}
+
+data class Scope(
+    val block: CodeBlockToken?,
+    val parentToken: BlockToken?,
+    val id: Int,
+    var bufferCount: Int,
+    val functionScope: String
+)
 
 /*
 'executeAfter' exists because of this case: "x = a++ * 4".
@@ -57,7 +86,13 @@ since we are unable to put incrementing instruction between addition instruction
 In that case, we use the first solution.
 Although it is much more expensive, this case is really rare.
 */
-data class TypedExpression(val value: String, val type: Types, val complete: Boolean, var addAfter: Array<String>? = null, var used: Boolean = false){
+data class TypedExpression(
+    val value: String,
+    val type: Types,
+    val complete: Boolean,
+    var addAfter: Array<String>? = null,
+    var used: Boolean = false
+){
     fun compatible(other: TypedExpression): Boolean{
         return type.compatible(other.type)
     }

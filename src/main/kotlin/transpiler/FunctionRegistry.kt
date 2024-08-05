@@ -15,6 +15,16 @@ class FunctionRegistry(instructionManager: InstructionManager){
         registry.addAll(createStandardRegistry(instructionManager))
     }
 
+    fun add(function: FunctionDeclarationToken, packageName: String = "main"){
+        registry.add(FunctionData(
+            function.name.word,
+            function.parameters.map { Types.valueOf(it.type.word.uppercase()) },
+            Types.valueOf(function.returnType.word.uppercase()),
+            packageName,
+            function
+        ))
+    }
+
     fun getFunctionData(name: String, parameters: List<Types>): FunctionData? {
         return registry.find { it.name == name && it.isCallable(parameters) }
     }
