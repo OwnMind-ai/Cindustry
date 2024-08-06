@@ -108,9 +108,13 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             val fileName = (import.path.last() as? WordToken)?.word ?: throw ParserException("Invalid import statement")
             if (set.any { it.name == fileName }) return
 
-            val path = import.path.joinToString { if (it is WordToken) it.word else "/" } + ".cind"
-            val file = File(directory, path)
-            files.add(getParsed(file))
+            if (fileName in functionRegistry.standardModules && import.path.size == 1) {
+                functionRegistry.use(fileName)
+            } else {
+                val path = import.path.joinToString { if (it is WordToken) it.word else "/" } + ".cind"
+                val file = File(directory, path)
+                files.add(getParsed(file))
+            }
         }
         set.addAll(files)
 

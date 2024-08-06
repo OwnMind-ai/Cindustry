@@ -10,9 +10,12 @@ class FunctionRegistry(instructionManager: InstructionManager){
     }
 
     private val registry: MutableList<FunctionData> = ArrayList()
+    val standardModules: MutableMap<String, List<FunctionData>> = HashMap()
 
     init {
         registry.addAll(createStandardRegistry(instructionManager))
+        standardModules["math"] = createMathModule(instructionManager)
+        standardModules["draw"] = createDrawModule(instructionManager)
     }
 
     fun add(function: FunctionDeclarationToken, packageName: String = "main"){
@@ -23,6 +26,10 @@ class FunctionRegistry(instructionManager: InstructionManager){
             packageName,
             function
         ))
+    }
+
+    fun use(name: String){
+        registry.addAll(standardModules[name] ?: throw TranspileException("Undefined standard module '$name'"))
     }
 
     fun getFunctionData(name: String, parameters: List<Types>): FunctionData? {
@@ -48,34 +55,11 @@ data class FunctionData(
     }
 }
 
-private fun addMathFunction(instructionManager: InstructionManager, registry: MutableList<FunctionData>, name: String, paramsNumber: Int = 2, actualName: String = name){
-    registry.add(FunctionData(name, List(paramsNumber) { Types.NUMBER }, Types.NUMBER, FunctionRegistry.STANDARD_PACKAGE) { params, dependedVariable ->
-        val variable = if (dependedVariable.variable != null){
-            dependedVariable.variable.used = true
-            dependedVariable.variable
-        } else
-            instructionManager.createBuffer(Types.NUMBER)
-
-        instructionManager.writeInstruction("op $actualName # # #", variable, params[0],
-            if (paramsNumber == 2) params[1] else TypedExpression("0", Types.NUMBER, false))
-        variable
-    })
-}
 
 private fun createStandardRegistry(instructionManager: InstructionManager): List<FunctionData> {
     val standard = LinkedList<FunctionData>()
 
-    // MATH FUNCTIONS
-    //TODO Move to separate 'math' package
 
-    listOf("pow", "max", "min", "angle", "angleDiff", "noise")
-        .forEach { addMathFunction(instructionManager, standard, it) }
-    listOf("abs", "log", "log10", "floor", "ceil", "sqrt", "rand", "sin", "cos", "tan", "asin", "acos", "atan")
-        .forEach { addMathFunction(instructionManager, standard, it, paramsNumber = 1) }
-
-    addMathFunction(instructionManager, standard, "intDiv", 2, "idiv")
-    addMathFunction(instructionManager, standard, "vectorLen", 2, "len")
-    addMathFunction(instructionManager, standard, "flip", 1, "not")
 
     // MINDUSTRY FUNCTIONS
     standard.add(FunctionData("print", listOf(Types.ANY), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
@@ -112,87 +96,6 @@ private fun createStandardRegistry(instructionManager: InstructionManager): List
         null
     })
 
-    standard.add(FunctionData("clearDisplay", listOf(), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { _, _ ->
-        instructionManager.writeInstruction("draw clear 0 0 0 0 0 0")
-        null
-    })
-
-    standard.add(FunctionData("clearDisplay", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw clear # # # 0 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("setColor", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw color # # # 255 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("setColor", listOf(Types.STRING), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        if (params[0].value.first() != '"' || params[0].value.last() != '"')   // TODO add type and specific syntax for these
-            throw TranspileException("For function 'color', that first parameter must be a string, not a variable or expression")
-
-        val value = params[0].value.replace("\"", "")
-        if (value.length != 6 || value.any { !it.isDigit() && !CharRange('a', 'f').contains(it.lowercaseChar()) })
-            throw TranspileException("Invalid color code")
-
-        instructionManager.writeInstruction("draw col %${value} 0 0 255 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("setColor", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw color # # # # 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("setStroke", listOf(Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw stroke # 0 0 0 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("drawLine", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw line # # # # 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("drawRect", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw rect # # # # 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("lineRect", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw lineRect # # # # 0 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("poly", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw poly # # # # # 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("linePole", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw linePoly # # # # # 0", *params)
-        null
-    })
-
-    standard.add(FunctionData("triangle", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("draw triangle # # # # # #", *params)
-        null
-    })
-
-    standard.add(FunctionData("image", listOf(Types.NUMBER, Types.NUMBER, Types.STRING, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        if (params[0].value.first() != '"' || params[0].value.last() != '"') {   // TODO add type and specific syntax for these
-            instructionManager.writeInstruction("draw image # # @${params[0].value.replace("\"", "")} # # 0", params[0], params[1], params[3], params[4])
-        } else {
-            instructionManager.writeInstruction("draw image # # # # # 0", *params)
-        }
-        null
-    })
-
-    standard.add(FunctionData("drawFlush", listOf(Types.BUILDING), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
-        instructionManager.writeInstruction("drawflush #", *params)
-        null
-    })
-
     standard.add(FunctionData("getLink", listOf(Types.NUMBER), Types.BUILDING, FunctionRegistry.STANDARD_PACKAGE) { params, dependedVariable ->
         if (dependedVariable.variable != null) {
             instructionManager.writeInstruction("getlink # #", dependedVariable.variable, *params)
@@ -216,4 +119,120 @@ private fun createStandardRegistry(instructionManager: InstructionManager): List
     })
 
     return standard
+}
+
+private fun createDrawModule(instructionManager: InstructionManager): List<FunctionData> {
+    val result = ArrayList<FunctionData>()
+
+    result.add(FunctionData("clearDisplay", listOf(), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { _, _ ->
+        instructionManager.writeInstruction("draw clear 0 0 0 0 0 0")
+        null
+    })
+
+    result.add(FunctionData("clearDisplay", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw clear # # # 0 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("setColor", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw color # # # 255 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("setColor", listOf(Types.STRING), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        if (params[0].value.first() != '"' || params[0].value.last() != '"')   // TODO add type and specific syntax for these
+            throw TranspileException("For function 'color', that first parameter must be a string, not a variable or expression")
+
+        val value = params[0].value.replace("\"", "")
+        if (value.length != 6 || value.any { !it.isDigit() && !CharRange('a', 'f').contains(it.lowercaseChar()) })
+            throw TranspileException("Invalid color code")
+
+        instructionManager.writeInstruction("draw col %${value} 0 0 255 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("setColor", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw color # # # # 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("setStroke", listOf(Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw stroke # 0 0 0 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("drawLine", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw line # # # # 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("drawRect", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw rect # # # # 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("lineRect", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw lineRect # # # # 0 0", *params)
+        null
+    })
+
+    result.add(FunctionData("poly", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw poly # # # # # 0", *params)
+        null
+    })
+
+    result.add(FunctionData("linePole", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw linePoly # # # # # 0", *params)
+        null
+    })
+
+    result.add(FunctionData("triangle", listOf(Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("draw triangle # # # # # #", *params)
+        null
+    })
+
+    result.add(FunctionData("image", listOf(Types.NUMBER, Types.NUMBER, Types.STRING, Types.NUMBER, Types.NUMBER), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        if (params[0].value.first() != '"' || params[0].value.last() != '"') {   // TODO add type and specific syntax for these
+            instructionManager.writeInstruction("draw image # # @${params[0].value.replace("\"", "")} # # 0", params[0], params[1], params[3], params[4])
+        } else {
+            instructionManager.writeInstruction("draw image # # # # # 0", *params)
+        }
+        null
+    })
+
+    result.add(FunctionData("drawFlush", listOf(Types.BUILDING), Types.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("drawflush #", *params)
+        null
+    })
+
+    return result
+}
+
+private fun addMathFunction(instructionManager: InstructionManager, registry: MutableList<FunctionData>, name: String, paramsNumber: Int = 2, actualName: String = name){
+    registry.add(FunctionData(name, List(paramsNumber) { Types.NUMBER }, Types.NUMBER, FunctionRegistry.STANDARD_PACKAGE) { params, dependedVariable ->
+        val variable = if (dependedVariable.variable != null){
+            dependedVariable.variable.used = true
+            dependedVariable.variable
+        } else
+            instructionManager.createBuffer(Types.NUMBER)
+
+        instructionManager.writeInstruction("op $actualName # # #", variable, params[0],
+            if (paramsNumber == 2) params[1] else TypedExpression("0", Types.NUMBER, false))
+        variable
+    })
+}
+
+private fun createMathModule(instructionManager: InstructionManager): List<FunctionData> {
+    val result = ArrayList<FunctionData>()
+
+    listOf("pow", "max", "min", "angle", "angleDiff", "noise")
+        .forEach { addMathFunction(instructionManager, result, it) }
+    listOf("abs", "log", "log10", "floor", "ceil", "sqrt", "rand", "sin", "cos", "tan", "asin", "acos", "atan")
+        .forEach { addMathFunction(instructionManager, result, it, paramsNumber = 1) }
+
+    addMathFunction(instructionManager, result, "intDiv", 2, "idiv")
+    addMathFunction(instructionManager, result, "vectorLen", 2, "len")
+    addMathFunction(instructionManager, result, "flip", 1, "not")
+
+    return result
 }
