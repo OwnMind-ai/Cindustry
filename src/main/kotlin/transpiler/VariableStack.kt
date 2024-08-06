@@ -41,7 +41,7 @@ class VariableStack {
 
 data class VariableData(
     val actualName: String,
-    val type: String,
+    val type: Type,
     val scope: Scope,
     var initialized: Boolean,
     var constant: Boolean
@@ -64,7 +64,7 @@ data class VariableData(
         if (!ignoreInitialization && !initialized)
             throw TranspileException("Variable '$actualName' is not initialized")
 
-        return TypedExpression(name(), Types.valueOf(type.uppercase()), false)
+        return TypedExpression(name(), type, false)
     }
 }
 
@@ -92,7 +92,7 @@ Although it is much more expensive, this case is really rare.
 */
 data class TypedExpression(
     val value: String,
-    val type: Types,
+    val type: Type,
     val complete: Boolean,
     var addAfter: Array<String>? = null,
     var used: Boolean = false

@@ -31,4 +31,18 @@ void main(){
 
     print(o, @message1);
     printCell(4, ", ", @cell1, @message2);
+
+    Test test = get(Test.FIRST);
+    if(test == Test.FIRST){
+        print(test, @message1);
+    }
+}
+
+Test get(Test t){
+    print(2, @message2);
+    return t;
+}
+
+enum Test{
+    FIRST, SECOND
 }

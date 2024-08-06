@@ -19,7 +19,8 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
     private val mainStream: MutableList<Instruction> = ArrayList()
     private val variableStack: VariableStack = VariableStack()
-    private val functionRegistry: FunctionRegistry = FunctionRegistry(this)
+    private val objectsRegistry: ObjectsRegistry = ObjectsRegistry()
+    private val functionRegistry: FunctionRegistry = FunctionRegistry(this, objectsRegistry)
 
     private val jumpIdPending: MutableMap<BlockToken, MutableList<Pair<String, JumpInstruction>>> = IdentityHashMap()
     private val nextIdPending: MutableList<(Int) -> Unit> = LinkedList()
@@ -31,10 +32,12 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         computeImports(files, fileToken.imports)
         files.remove(fileToken)
 
+        mergeObjects(files)
         mergeGlobalVariables(files)
         mergeFunctions(files)
 
         fileToken.globalVariables.forEach(::transpileInitialization)
+        fileToken.enums.forEach { objectsRegistry.addEnum(it, VariableStack.GLOBAL_SCOPE) }
 
         registerFunctions(fileToken.functions.filter { it.name.word != "main" })
 
@@ -59,6 +62,17 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         }
 
         return mainStream.joinToString("\n") { it.getCode(::getInstructionIndex) }
+    }
+
+    // TODO those conflicts can be easily avoided wih proper imports but not for now
+    private fun mergeObjects(files: HashSet<FileToken>) {
+        for (file in files) {
+            val conflictCandidate = objectsRegistry.enums.find { it.name in file.enums.map { i -> i.name.word } }
+            if (conflictCandidate != null)
+                throw TranspileException("Enum '${conflictCandidate.name}' from '${conflictCandidate.from}' conflicts with '${conflictCandidate.name}' at '${file.name}'")
+
+            file.enums.forEach { objectsRegistry.addEnum(it, file.name) }
+        }
     }
 
     private fun mergeGlobalVariables(files: HashSet<FileToken>) {
@@ -91,7 +105,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
             for (function in file.functions) {
                 val conflictCandidate = functionRegistry.getFunctionData(function.name.word, function.parameters
-                    .map { Types.valueOf(it.type.word.uppercase()) })
+                    .map { objectsRegistry.findType(it.type.word) })
                 if (conflictCandidate != null)
                     //TODO make imports as package private OR force to use module name before functions
                     throw TranspileException("Function '${conflictCandidate.name}' from '${conflictCandidate.packageName}'" +
@@ -306,7 +320,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
                 else -> throw IllegalArgumentException()
             } }
 
-            if (function.returnType == Types.VOID)
+            if (function.returnType == Type.VOID)
                 null
             else{
                 val result = variableStack.returnStack.filterValues { it.parentToken == function.token }.keys.first()
@@ -352,9 +366,15 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             val field = token.left as FieldAccessToken
 
             val from = transpileExpressionWithReference(field.from)
-            if (from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+            if (from.complete) throw TranspileException("Invalid field access")
+            if (from.type == Type.ENUM)
+                throw TranspileException("Enum values are immutable")
+            else if (from.type != Type.BUILDING)
+                throw TranspileException("Invalid field access")
 
-            val fieldData = BuildingFields.getField(field.field.word)!!
+            val fieldData = BuildingFields.getField(field.field.word)
+                ?: throw TranspileException("Undefined building property '${field.field.word}'")
+
             if (!fieldData.mutable)
                 throw TranspileException("Property '${field.field.word}' is immutable")
 
@@ -365,7 +385,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
                     )
                 )
             } else {
-                if (increment) TypedExpression("1", Types.NUMBER, false)
+                if (increment) TypedExpression("1", Type.NUMBER, false)
                 else transpileExpressionWithReference(token.right)
             }
 
@@ -381,7 +401,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         val variable = (if (token.left is NamedToken) token.left else token.right) as NamedToken
         val variableTyped = variable.getTyped(token.operator.operator == "=")
 
-        val value = if (increment) TypedExpression("1", Types.NUMBER, false)
+        val value = if (increment) TypedExpression("1", Type.NUMBER, false)
         else transpileExpressionWithReference(
             token.right,
             DependedValue(if (assigmentComposition) null else variableTyped)
@@ -402,7 +422,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         } else if (token.operator.operator == "=") {
             writeInstruction("set ${variableTyped.value} #", value)
         } else {
-            if (!value.compatible(TypedExpression("", Types.NUMBER, false)))
+            if (!value.compatible(TypedExpression("", Type.NUMBER, false)))
                 throw TranspileException("Unable to perform string concatenation in this version")
 
             writeInstruction(
@@ -414,11 +434,11 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
     private fun transpileExpressionWithReference(value: ExpressionToken, dependedVariable: DependedValue = DependedValue(null)): TypedExpression {
         if (value is TypedToken) return value.value
-        if (value is OperationToken.EmptySide) return TypedExpression("EMPTY", Types.ANY, false)
-        if (value is NumberToken) return TypedExpression(value.number, Types.NUMBER, false)
-        if (value is BooleanToken) return TypedExpression(if (value.value) "1" else "0", Types.BOOL, false)
-        if (value is StringToken) return TypedExpression("\"${value.content}\"", Types.STRING, false)
-        if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Types.ANY, false)
+        if (value is OperationToken.EmptySide) return TypedExpression("EMPTY", Type.ANY, false)
+        if (value is NumberToken) return TypedExpression(value.number, Type.NUMBER, false)
+        if (value is BooleanToken) return TypedExpression(if (value.value) "1" else "0", Type.BOOL, false)
+        if (value is StringToken) return TypedExpression("\"${value.content}\"", Type.STRING, false)
+        if (value is VariableToken && value.name.word == "null") return TypedExpression("null", Type.ANY, false)
 
         if(value is ArrayAccessToken)  //TODO actual arrays
             return transpileCallToken(
@@ -430,12 +450,17 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
                 ?: throw TranspileException("Function '${value.name.word}' doesn't return any value")
 
         if (value is BuildingToken) {
-            checkVariable(value.name){ checkType(it.getTyped().type, Types.BUILDING) }
-            return TypedExpression(value.name, Types.BUILDING, false)
+            checkType(getVariable(value.name).getTyped().type, Type.BUILDING)
+            return TypedExpression(value.name, Type.BUILDING, false)
         }
 
         if (value is VariableToken) {
             var variable: TypedExpression? = null
+
+            objectsRegistry.enums.find { it.name == value.name.word }?.let {
+                return TypedExpression(it.name, Type.ENUM, false)
+            }
+
             checkVariable(value.name.word) { variable = it.getTyped() }
             return variable!!
         }
@@ -447,7 +472,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             if (listOf(value.left, value.right).any { it is ArrayAccessToken } && value.operator.operator in OperatorToken.ASSIGMENT_INCREMENT_OPERATION){
                 if (value.operator.operator in listOf("++", "--") && value.left is OperationToken.EmptySide){
                     val array = value.right as ArrayAccessToken
-                    val buffer = createBuffer(Types.NUMBER)
+                    val buffer = createBuffer(Type.NUMBER)
                     this.transpileCallToken(CallToken(WordToken("read"), listOf(array.array, array.index)), DependedValue(buffer))
 
                     this.transpileExpression(OperationToken(value.operator, OperationToken.EmptySide(), buffer.toToken()))
@@ -459,10 +484,10 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
                     val arrayTyped = transpileExpressionWithReference(array.array)
                     val indexTyped = transpileExpressionWithReference(array.index)
 
-                    val buffer = createBuffer(Types.ANY)
+                    val buffer = createBuffer(Type.ANY)
                     this.transpileCallToken(CallToken(WordToken("read"), listOf(array.array, array.index)), DependedValue(buffer))
 
-                    val right = if (value.operator.operator in listOf("++", "--")) TypedExpression("1", Types.NUMBER, false)
+                    val right = if (value.operator.operator in listOf("++", "--")) TypedExpression("1", Type.NUMBER, false)
                         else transpileExpressionWithReference(value.right)
 
                     if (value.operator.operator == "="){
@@ -490,7 +515,17 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
     private fun transpileFieldValue(token: FieldAccessToken): TypedExpression {
         val from = transpileExpressionWithReference(token.from)
-        if(from.complete || from.type != Types.BUILDING) throw TranspileException("Invalid field access")
+        if (from.complete) throw TranspileException("Invalid field access")
+
+        if (from.type == Type.ENUM){
+            val enum = objectsRegistry.enums.find { it.name == from.value } ?: throw TranspileException("No enum '${from.value}' found")
+            if (token.field.word !in enum.values)
+                throw TranspileException("There is no enum entry '${enum.name}.${token.field.word}'")
+
+            return TypedExpression("\"${enum.name}.${token.field.word}\"", Type.enum(enum.name), false)
+        }
+
+        if (from.type != Type.BUILDING) throw TranspileException("Invalid field access")
 
         val field = BuildingFields.getField(token.field.word) ?: throw TranspileException("Unknown building property")
         val buffer = createBuffer(field.resultType)
@@ -500,7 +535,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         return buffer
     }
 
-    override fun createBuffer(type: Types) =
+    override fun createBuffer(type: Type) =
         TypedExpression(variableStack.requestBufferVariable(), type, false)
 
     private fun transpileOperationChain(value: OperationToken, buffer: TypedExpression, dependedVariable: DependedValue, shortAssigmentPossible: Boolean = true): TypedExpression {
@@ -544,7 +579,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
                 }
             } else if (value.operator.operator == "!"){
                 return transpileFlatOperation(
-                    TypedExpression("1", Types.BOOL, false),
+                    TypedExpression("1", Type.BOOL, false),
                     transpileExpressionWithReference(value.right),
                     dependedVariable, value.operator.operator, value, buffer
                 )
@@ -620,11 +655,11 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         checkType(left, right)
 
         if (dependedVariable.jump) {
-            if (getReturnType(value) !in listOf(Types.BOOL, Types.ANY))
+            if (getReturnType(value) !in listOf(Type.BOOL, Type.ANY))
                 throw TranspileException("Invalid condition type ${getReturnType(value).name}")
 
             // Although it is not really a complete expression, it is assumed that it always comes with jump instruction
-            return TypedExpression("${getOperationName(operation)} ${left.value} ${right.value}", Types.BOOL, true)
+            return TypedExpression("${getOperationName(operation)} ${left.value} ${right.value}", Type.BOOL, true)
         } else if (dependedVariable.variable != null) {
             checkType(dependedVariable.variable, TypedExpression("", getReturnType(value), false))
 
@@ -650,7 +685,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         checkType(first.type, second.type)
     }
 
-    private fun checkType(first: Types, second: Types) {
+    private fun checkType(first: Type, second: Type) {
         if (!first.compatible(second))
             throw TranspileException("Type '${first.name.lowercase()}' is not compatible with type '${second.name.lowercase()}'")
     }
@@ -667,8 +702,9 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     }
 
     private fun transpileInitialization(token: InitializationToken) {
+        val type = objectsRegistry.findType(token.type.word)
         val data = VariableData(
-            token.name.word, token.type.word,
+            token.name.word, type,
             variableStack.blockStack.last(), token.value != null, token.const)
 
         val functionScope = getFunctionScope()
@@ -719,12 +755,12 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         }
     }
 
-    private fun getReturnType(token: OperationToken): Types {
+    private fun getReturnType(token: OperationToken): Type {
         return when(token.operator.operator){
-            "=" -> (token.left as? VariableToken)?.name?.word?.let { getVariable(it).getTyped().type } ?: Types.ANY
-            "@" -> Types.BUILDING
-            "+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "++", "--", ">>", "<<" -> Types.NUMBER
-            ">", "<", ">=", "<=", "==", "===", "!=", "!", "&&", "||", "&", "|" -> Types.BOOL
+            "=" -> (token.left as? VariableToken)?.name?.word?.let { getVariable(it).getTyped().type } ?: Type.ANY
+            "@" -> Type.BUILDING
+            "+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "++", "--", ">>", "<<" -> Type.NUMBER
+            ">", "<", ">=", "<=", "==", "===", "!=", "!", "&&", "||", "&", "|" -> Type.BOOL
             else -> throw IllegalArgumentException()
         }
     }

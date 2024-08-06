@@ -16,7 +16,7 @@ class ParserTest {
             
             void main(){
                 @cell1[0];
-                const number g = 100;
+                const Enum g = Enum.FIRST;
                 number x = a++ * 4;
                 
                 for(;;)
@@ -34,8 +34,12 @@ class ParserTest {
                 }
             }
             
-            number foo(const number a, number b, number c){
+            Enum foo(const number a, number b, number c){
                 return b++; 
+            }
+            
+            enum Enum {
+                FIRST, SECOND
             }
         """.trimIndent()
 
@@ -48,10 +52,11 @@ class ParserTest {
                 InitializationToken(WordToken("building"), WordToken("message1"), BuildingToken("message1")),
                 InitializationToken(WordToken("a"), WordToken("number"), null, true)
             ),
+            mutableListOf(EnumToken(WordToken("Enum"), listOf(WordToken("FIRST"), WordToken("SECOND")))),
             mutableListOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
                 ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
-                InitializationToken(WordToken("number"), WordToken("g"), NumberToken("100"), const = true),
+                InitializationToken(WordToken("Enum"), WordToken("g"), FieldAccessToken(VariableToken(WordToken("Enum")), WordToken("FIRST")), const = true),
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
                 ForToken(
@@ -85,7 +90,7 @@ class ParserTest {
                 )))
             ))),
 
-            FunctionDeclarationToken(WordToken("foo"), WordToken("number"),
+            FunctionDeclarationToken(WordToken("foo"), WordToken("Enum"),
                 listOf(
                     ParameterToken(WordToken("number"), WordToken("a"), true),
                     ParameterToken(WordToken("number"), WordToken("b"), false),

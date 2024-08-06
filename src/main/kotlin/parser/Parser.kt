@@ -2,7 +2,7 @@ package org.cindustry.parser
 
 class Parser(private val lexer: Lexer) {
     fun parse(fileName: String): FileToken{
-        val result = FileToken(fileName, ArrayList(), ArrayList(), ArrayList())
+        val result = FileToken(fileName, ArrayList(), ArrayList(), ArrayList(), ArrayList())
         while (!lexer.ended())
             parseOnFileLevel(result)
 
@@ -10,32 +10,53 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseOnFileLevel(file: FileToken) {
-        if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "use") {
-            lexer.next()
-            lexer.strictNext<OperatorToken>().assert { (it as OperatorToken).operator == "@" }
-            val name = lexer.strictNext<WordToken>()
-            name.assertNotKeyword()
+        if (lexer.peek() is WordToken) {
+            val wordToken = lexer.peek() as WordToken
+            when (wordToken.word) {
+                "use" -> {
+                    lexer.next()
+                    lexer.strictNext<OperatorToken>().assert { (it as OperatorToken).operator == "@" }
+                    val name = lexer.strictNext<WordToken>()
+                    name.assertNotKeyword()
 
-            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+                    lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
 
-            file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
-        } else if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global") {
-            lexer.next()
-            file.globalVariables.add(parseInitialization())
-            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
-        } else if((lexer.peek() as? WordToken)?.word == "import") {
-            lexer.next()
-            val result = ArrayList<Token>()
-            while ((lexer.peek() as? PunctuationToken)?.character != ";"){
-                val token = lexer.next()
-                if (token is WordToken || (token as? PunctuationToken)?.character == ".")
-                    result.add(token)
-                else
-                    throw ParserException("Invalid import statement")
+                    file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
+                }
+                "global" -> {
+                    lexer.next()
+                    file.globalVariables.add(parseInitialization(lexer.strictNext()))
+                    lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+                }
+                "enum" -> {
+                    lexer.next()
+                    val name = lexer.strictNext<WordToken>()
+                    name.assertNotKeyword()
+
+                    val values = delimiter("{", ",", "}", {
+                        lexer.strictNext<WordToken>().apply { this.assertNotKeyword() }
+                    })
+
+                    file.enums.add(EnumToken(name, values))
+                }
+                "import" -> {
+                    lexer.next()
+                    val result = ArrayList<Token>()
+                    while ((lexer.peek() as? PunctuationToken)?.character != ";"){
+                        val token = lexer.next()
+                        if (token is WordToken || (token as? PunctuationToken)?.character == ".")
+                            result.add(token)
+                        else
+                            throw ParserException("Invalid import statement")
+                    }
+
+                    lexer.strictNext<PunctuationToken>()
+                    file.imports.add(ImportToken(result))
+                }
+                else -> {
+                    file.functions.add(parseFunction())
+                }
             }
-
-            lexer.strictNext<PunctuationToken>()
-            file.imports.add(ImportToken(result))
         } else {
             file.functions.add(parseFunction())
         }
@@ -121,11 +142,12 @@ class Parser(private val lexer: Lexer) {
 
             lexer.next()
             val right = if(current.operator in listOf("@", "++", "--")){
-                val peeked = lexer.peek()
-                if (peeked !is WordToken) throw ParserException("Invalid operator use")
+                val next = lexer.next()
+                if (next !is WordToken) throw ParserException("Invalid operator use")
 
-                val result = parseWordToken(peeked)
-                if (result !is VariableToken) throw ParserException("Invalid operator use")
+                val result = parseWordToken(next)
+                if (result !is VariableToken)
+                    throw ParserException("Invalid operator use")
 
                 if (current.operator == "@")
                     return BuildingToken(result.getName())
@@ -144,7 +166,7 @@ class Parser(private val lexer: Lexer) {
         }
 
         if (current is WordToken) {
-            return parseWordToken(current)
+            return parseWordToken(lexer.strictNext())
         }
 
         if (current is PunctuationToken && current.character == "("){
@@ -162,15 +184,15 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseWordToken(current: WordToken): ExecutableToken {
-        if (WordToken.TYPES.contains(current.word) || current.word == "const")
-            return this.parseInitialization()
+        if (current.word == "const" || ((current as? WordToken)?.word !in WordToken.KEYWORDS && lexer.peek() is WordToken))  // For enums and structs
+            return this.parseInitialization(current)
 
         if (current.word == "true" || current.word == "false")
-            return BooleanToken(lexer.strictNext<WordToken>().word == "true")
+            return BooleanToken(current.word == "true")
 
         if (current.word in listOf(ReturnToken.RETURN, ReturnToken.BREAK, ReturnToken.CONTINUE)) {
             return ReturnToken(
-                lexer.strictNext(),
+                current,
                 if (lexer.peek() is PunctuationToken) {
                     null
                 } else {
@@ -183,17 +205,15 @@ class Parser(private val lexer: Lexer) {
             )
         }
 
-        val token = lexer.strictNext<WordToken>()
-
-        if (token.word == "for") return parseFor()
-        if (token.word == "while") return parseWhile()
-        if (token.word == "do") return parseDoWhile()
-        if (token.word == "if") return parseIf()
+        if (current.word == "for") return parseFor()
+        if (current.word == "while") return parseWhile()
+        if (current.word == "do") return parseDoWhile()
+        if (current.word == "if") return parseIf()
 
         if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == "(")
-            return this.parseCall(token)
+            return this.parseCall(current)
 
-        return VariableToken(token)
+        return VariableToken(current)
     }
 
     private fun parseArrayAccess(token: ExpressionToken): ArrayAccessToken {
@@ -272,11 +292,13 @@ class Parser(private val lexer: Lexer) {
         return CallToken(token, parameters.map { it as ExpressionToken })
     }
 
-    private fun parseInitialization(): InitializationToken {
-        val const = (lexer.peek() as? WordToken)?.word == "const"
-        if(const) lexer.next()
+    private fun parseInitialization(first: WordToken): InitializationToken {
+        var token = first
+        val const = token.word == "const"
+        if(const)
+            token = lexer.strictNext<WordToken>()
 
-        val type = lexer.strictNext<WordToken>()
+        val type = token
         val name = lexer.strictNext<WordToken>()
         var value: ExecutableToken? = null
         name.assertNotKeyword()
@@ -300,7 +322,7 @@ class Parser(private val lexer: Lexer) {
         if(const) lexer.next()
 
         val type = lexer.strictNext<WordToken>()
-        type.assertTypeKeyword()
+        type.assert { type.word !in WordToken.KEYWORDS }
 
         val name = lexer.strictNext<WordToken>()
 

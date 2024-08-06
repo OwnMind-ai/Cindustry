@@ -222,6 +222,7 @@ data class FileToken(
     var name: String,
     var imports: MutableList<ImportToken>,
     var globalVariables: MutableList<InitializationToken>,
+    var enums: MutableList<EnumToken>,
     var functions: MutableList<FunctionDeclarationToken>
 ) : Token {
     override fun toString(): String {
@@ -231,6 +232,11 @@ data class FileToken(
 
 data class ImportToken (
     var path: List<Token>
+) : Token
+
+data class EnumToken (
+    var name: WordToken,
+    var values: List<WordToken>
 ) : Token
 
 fun nextChildToken(t: Token) = when (t) {
