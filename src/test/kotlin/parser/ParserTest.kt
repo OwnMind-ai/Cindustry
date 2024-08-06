@@ -9,6 +9,8 @@ class ParserTest {
     @Test
     fun parse() {
         val file = """
+            import math.pow;
+            
             use @message1; 
             global const number a;
             
@@ -40,11 +42,13 @@ class ParserTest {
         val parser = Parser(Lexer(CharStream(file)))
 
         assertEquals(FileToken(
-            listOf(
+            "test",
+            mutableListOf(ImportToken(listOf(WordToken("math"), PunctuationToken("."), WordToken("pow")))),
+            mutableListOf(
                 InitializationToken(WordToken("building"), WordToken("message1"), BuildingToken("message1")),
                 InitializationToken(WordToken("a"), WordToken("number"), null, true)
             ),
-            listOf(
+            mutableListOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
                 ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
                 InitializationToken(WordToken("number"), WordToken("g"), NumberToken("100"), const = true),
@@ -90,6 +94,6 @@ class ParserTest {
                 CodeBlockToken(listOf(
                     ReturnToken(WordToken("return"), OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide()))
                 )))
-        )).toString(), parser.parse().toString())
+        )).toString(), parser.parse("test").toString())
     }
 }

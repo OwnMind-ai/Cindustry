@@ -11,7 +11,7 @@ class VariableStack {
     val returnStack: MutableMap<TypedExpression, Scope> = HashMap()
 
     init {
-        blockStack.add(Scope(null, null, 0, 0, "main"))  // File scope
+        blockStack.add(Scope(null, null, 0, 0, GLOBAL_SCOPE))  // File scope
     }
 
     fun add(block: CodeBlockToken, parent: BlockToken){
@@ -31,20 +31,24 @@ class VariableStack {
         if (removed.block != block)
             throw IllegalStateException()  // TODO Change to InternalParserException
 
-        stack.removeIf { it.scope?.block == removed.block }
+        stack.removeIf { it.scope.block == removed.block }
+    }
+
+    companion object {
+        const val GLOBAL_SCOPE: String = "main"
     }
 }
 
 data class VariableData(
     val actualName: String,
     val type: String,
-    val scope: Scope?,
+    val scope: Scope,
     var initialized: Boolean,
     var constant: Boolean
 ){
     companion object{
         fun variableName(scope: String?, actualName: String): String {
-            if (scope == "main" || scope == null)
+            if (scope == VariableStack.GLOBAL_SCOPE || scope == null)
                 return actualName
 
             return "_${scope}_$actualName"   //TODO fix, breaks by overloaded functions
@@ -53,7 +57,7 @@ data class VariableData(
     }
 
     fun name(): String{
-        return variableName(scope?.functionScope, actualName)
+        return variableName(scope.functionScope, actualName)
     }
 
     fun getTyped(ignoreInitialization: Boolean = false): TypedExpression{

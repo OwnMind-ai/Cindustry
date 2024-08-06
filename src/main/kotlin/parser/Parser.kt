@@ -1,18 +1,15 @@
 package org.cindustry.parser
 
-import java.util.*
-
 class Parser(private val lexer: Lexer) {
-    fun parse(): FileToken{
-        val globalVariables = ArrayList<InitializationToken>()
-        val functions = ArrayList<FunctionDeclarationToken>()
+    fun parse(fileName: String): FileToken{
+        val result = FileToken(fileName, ArrayList(), ArrayList(), ArrayList())
         while (!lexer.ended())
-            parseOnFileLevel(globalVariables, functions)
+            parseOnFileLevel(result)
 
-        return FileToken(globalVariables, functions)
+        return result
     }
 
-    private fun parseOnFileLevel(globalVariables: ArrayList<InitializationToken>, functions: ArrayList<FunctionDeclarationToken>) {
+    private fun parseOnFileLevel(file: FileToken) {
         if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "use") {
             lexer.next()
             lexer.strictNext<OperatorToken>().assert { (it as OperatorToken).operator == "@" }
@@ -21,13 +18,26 @@ class Parser(private val lexer: Lexer) {
 
             lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
 
-            globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
+            file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
         } else if ((lexer.peek() is WordToken) && (lexer.peek() as WordToken).word == "global") {
             lexer.next()
-            globalVariables.add(parseInitialization())
+            file.globalVariables.add(parseInitialization())
             lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+        } else if((lexer.peek() as? WordToken)?.word == "import") {
+            lexer.next()
+            val result = ArrayList<Token>()
+            while ((lexer.peek() as? PunctuationToken)?.character != ";"){
+                val token = lexer.next()
+                if (token is WordToken || (token as? PunctuationToken)?.character == ".")
+                    result.add(token)
+                else
+                    throw ParserException("Invalid import statement")
+            }
+
+            lexer.strictNext<PunctuationToken>()
+            file.imports.add(ImportToken(result))
         } else {
-            functions.add(parseFunction())
+            file.functions.add(parseFunction())
         }
     }
 
@@ -319,26 +329,7 @@ class Parser(private val lexer: Lexer) {
         parameters.filter { it.const == null }.forEach{ it.const = true }
     }
 
-    private fun nextChildToken(t: Token) = when (t) {
-        is OperationToken -> listOf(t.left, t.right)
-        is CallToken -> t.parameters
-        is ArrayAccessToken -> listOf(t.array, t.index)
-        is FieldAccessToken -> listOf(t.from)
-        is BlockToken -> t.getAllExecutableTokens()
-        is CodeBlockToken -> t.statements
-        is InitializationToken -> if (t.value != null) listOf(t.value!!) else listOf()
-        is ReturnToken -> if (t.value != null) listOf(t.value!!) else listOf()
-        else -> listOf()
-    }
 
-    private fun <T> executeDeep(token: T, next: (T) -> List<T>, execute: (T) -> Unit){
-        execute.invoke(token)
-
-        val list = next.invoke(token).filter(Objects::nonNull)
-        if (list.isEmpty()) return
-
-        list.forEach { executeDeep(it, next, execute) }
-    }
 
     private fun <T: Token?> delimiter(start: String, separator: String, end: String, parser: () -> T, separatorIgnorePredicate: (T) -> Boolean = { false }): List<T>{
         val result: MutableList<T> = ArrayList()

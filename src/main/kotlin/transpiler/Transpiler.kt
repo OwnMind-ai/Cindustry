@@ -4,12 +4,17 @@ import org.cindustry.parser.*
 import org.cindustry.transpiler.instructions.Instruction
 import org.cindustry.transpiler.instructions.InstructionManager
 import org.cindustry.transpiler.instructions.JumpInstruction
+import java.io.File
 import java.util.*
 
-class Transpiler(private val fileToken: FileToken) : InstructionManager{
+class Transpiler(private val fileToken: FileToken, private val directory: File) : InstructionManager{
     companion object{
         const val AFTER_BLOCK_END = "blockStart"
         const val AFTER_LOOP_END = "afterLoopEnd"
+
+        fun getParsed(file: File): FileToken{
+            return Parser(Lexer(CharStream(file.readText()))).parse(file.name.replace(".cind", ""))
+        }
     }
 
     private val mainStream: MutableList<Instruction> = ArrayList()
@@ -21,6 +26,14 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     private var counter = 0
 
     fun transpile(): String{
+        val files = HashSet<FileToken>()
+        files.add(fileToken)
+        computeImports(files, fileToken.imports)
+        files.remove(fileToken)
+
+        mergeGlobalVariables(files)
+        mergeFunctions(files)
+
         fileToken.globalVariables.forEach(::transpileInitialization)
 
         registerFunctions(fileToken.functions.filter { it.name.word != "main" })
@@ -46,6 +59,63 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
         }
 
         return mainStream.joinToString("\n") { it.getCode(::getInstructionIndex) }
+    }
+
+    private fun mergeGlobalVariables(files: HashSet<FileToken>) {
+        for (file in files){
+            val packageName = file.name
+
+            val renamingMap: MutableMap<String, String> = HashMap()
+
+            for (variable in file.globalVariables){
+                if (variable.value is BuildingToken)
+                    throw TranspileException("Importing modules that use buildings is prohibited: $packageName")
+
+                val oldName = variable.name.word
+                variable.name.word = "__${packageName}_$oldName"
+                renamingMap[oldName] = variable.name.word
+
+                fileToken.globalVariables.add(variable)
+            }
+
+            executeDeep(file, ::nextChildToken){
+                if (it is VariableToken && it.name.word in renamingMap)
+                    it.name.word = renamingMap[it.name.word]!!
+            }
+        }
+    }
+
+    private fun mergeFunctions(files: HashSet<FileToken>) {
+        for (file in files) {
+            val packageName = file.name
+
+            for (function in file.functions) {
+                val conflictCandidate = functionRegistry.getFunctionData(function.name.word, function.parameters
+                    .map { Types.valueOf(it.type.word.uppercase()) })
+                if (conflictCandidate != null)
+                    //TODO make imports as package private OR force to use module name before functions
+                    throw TranspileException("Function '${conflictCandidate.name}' from '${conflictCandidate.packageName}'" +
+                            " conflicts with imported function '${function.name}' from '$packageName'")
+
+                functionRegistry.add(function, packageName)
+            }
+        }
+    }
+
+    private fun computeImports(set: HashSet<FileToken>, imports: List<ImportToken>) {
+        val files = ArrayList<FileToken>()
+        for (import in imports) {
+            val fileName = (import.path.last() as? WordToken)?.word ?: throw ParserException("Invalid import statement")
+            if (set.any { it.name == fileName }) return
+
+            val path = import.path.joinToString { if (it is WordToken) it.word else "/" } + ".cind"
+            val file = File(directory, path)
+            files.add(getParsed(file))
+        }
+        set.addAll(files)
+
+        if (files.isNotEmpty())
+            computeImports(set, files.flatMap { it.imports })
     }
 
     private fun registerFunctions(functions: List<FunctionDeclarationToken>) {
@@ -201,7 +271,8 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
     private fun transpileCallToken(
         token: CallToken, dependedVariable: DependedValue = DependedValue(null)
     ): TypedExpression? {
-        if (token.name.word == getFunctionScope())
+        if (variableStack.blockStack.filter { it.parentToken != null && it.parentToken is FunctionDeclarationToken }
+                .any { (it.parentToken as FunctionDeclarationToken).name == token.name })
             throw TranspileException("Recursions are not allowed in this version")
 
         val parameters = token.parameters.map { transpileExpressionWithReference(it) }
@@ -587,17 +658,17 @@ class Transpiler(private val fileToken: FileToken) : InstructionManager{
 
     private fun getVariable(name: String): VariableData {
         val functionScope = getFunctionScope()
-        return variableStack.stack.filter { it.scope?.functionScope == functionScope }.find { it.name() == name}
+        return variableStack.stack.filter { it.scope.functionScope in listOf(functionScope, VariableStack.GLOBAL_SCOPE) }.find { it.name() == name}
             ?: throw TranspileException("Variable '$name' is not defined in this scope")
     }
 
     private fun transpileInitialization(token: InitializationToken) {
         val data = VariableData(
             token.name.word, token.type.word,
-            variableStack.blockStack.lastOrNull(), token.value != null, token.const)
+            variableStack.blockStack.last(), token.value != null, token.const)
 
         val functionScope = getFunctionScope()
-        if(variableStack.stack.filter { it.scope?.functionScope == functionScope }.any{ it.name() == data.name() })
+        if(variableStack.stack.filter { it.scope.functionScope == functionScope }.any{ it.name() == data.name() })
             throw TranspileException("Variable '${token.name.word}' already exists in this scope")
 
         variableStack.stack.add(data)

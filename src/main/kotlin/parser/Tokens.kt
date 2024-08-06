@@ -1,5 +1,7 @@
 package org.cindustry.parser
 
+import java.util.*
+
 interface Token{
     fun assert(message: String = "Invalid token", predicate: (Token) -> Boolean){
         if (!predicate.invoke(this))
@@ -14,7 +16,7 @@ data class WordToken(
 ) : Token {
     companion object{
         val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
-        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as")
+        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as", "import")
     }
 
     fun assertTypeKeyword() {
@@ -217,10 +219,38 @@ data class FunctionDeclarationToken(
 }
 
 data class FileToken(
-    var globalVariables: List<InitializationToken>,
-    var functions: List<FunctionDeclarationToken>
+    var name: String,
+    var imports: MutableList<ImportToken>,
+    var globalVariables: MutableList<InitializationToken>,
+    var functions: MutableList<FunctionDeclarationToken>
 ) : Token {
     override fun toString(): String {
         return "FILE($functions)"
     }
+}
+
+data class ImportToken (
+    var path: List<Token>
+) : Token
+
+fun nextChildToken(t: Token) = when (t) {
+    is OperationToken -> listOf(t.left, t.right)
+    is CallToken -> t.parameters
+    is ArrayAccessToken -> listOf(t.array, t.index)
+    is FieldAccessToken -> listOf(t.from)
+    is BlockToken -> t.getAllExecutableTokens()
+    is CodeBlockToken -> t.statements
+    is InitializationToken -> if (t.value != null) listOf(t.value!!) else listOf()
+    is ReturnToken -> if (t.value != null) listOf(t.value!!) else listOf()
+    is FileToken -> t.functions
+    else -> listOf()
+}
+
+fun <T> executeDeep(token: T, next: (T) -> List<T>, execute: (T) -> Unit){
+    execute.invoke(token)
+
+    val list = next.invoke(token).filter(Objects::nonNull)
+    if (list.isEmpty()) return
+
+    list.forEach { executeDeep(it, next, execute) }
 }

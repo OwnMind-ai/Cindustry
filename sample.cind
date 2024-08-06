@@ -1,3 +1,5 @@
+import functions;
+
 use @message1;
 use @message2;
 use @cell1;
@@ -28,18 +30,4 @@ void main(){
 
     print(o, @message1);
     printCell(4, ", ", @cell1, @message2);
-}
-
-bool isBoth(number i){
-    return i % 3 == 0 && i % 5 == 0;
-}
-
-void printCell(number n, string delimiter, building cell, building message){
-    for(number i = 0; i < n; i++){
-        print(cell[i]);
-        if(i + 1 != n)
-            print(delimiter);
-    }
-
-    printFlush(message);
 }
