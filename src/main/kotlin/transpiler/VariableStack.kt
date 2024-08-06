@@ -91,7 +91,7 @@ In that case, we use the first solution.
 Although it is much more expensive, this case is really rare.
 */
 data class TypedExpression(
-    val value: String,
+    var value: String,
     val type: Type,
     val complete: Boolean,
     var addAfter: Array<String>? = null,

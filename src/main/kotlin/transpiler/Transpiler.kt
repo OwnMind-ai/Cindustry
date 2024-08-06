@@ -190,6 +190,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         }
     }
 
+    // TODO optimize if always true/false (useful for standard functions that use enums)
     private fun transpileIf(token: IfToken) {
         val conditionToken = OperationOptimizer.optimize(
                 OperationToken(OperatorToken("!"), OperationToken.EmptySide(), token.condition))

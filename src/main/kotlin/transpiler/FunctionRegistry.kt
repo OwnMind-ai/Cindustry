@@ -14,7 +14,7 @@ class FunctionRegistry(instructionManager: InstructionManager, private val objec
     val standardModules: MutableMap<String, List<FunctionData>> = HashMap()
 
     init {
-        registry.addAll(createStandardRegistry(instructionManager))
+        registry.addAll(createStandardRegistry(instructionManager, objectsRegistry))
         standardModules["math"] = createMathModule(instructionManager)
         standardModules["draw"] = createDrawModule(instructionManager)
     }
@@ -57,8 +57,23 @@ data class FunctionData(
 }
 
 
-private fun createStandardRegistry(instructionManager: InstructionManager): List<FunctionData> {
+private fun createStandardRegistry(instructionManager: InstructionManager, objectsRegistry: ObjectsRegistry): List<FunctionData> {
     val standard = LinkedList<FunctionData>()
+
+    objectsRegistry.enums.add(EnumData(
+        "RadarTarget", FunctionRegistry.STANDARD_PACKAGE,
+            listOf("ANY", "ALLY", "ATTACKER", "BOSS", "ENEMY", "PLAYER", "FLYING", "GROUND")
+    ))
+
+    objectsRegistry.enums.add(EnumData(
+        "RadarSorting", FunctionRegistry.STANDARD_PACKAGE,
+        listOf("DISTANCE", "HEALTH", "SHIELD", "ARMOR", "MAX_HEALTH")
+    ))
+
+    objectsRegistry.enums.add(EnumData(
+        "ContentType", FunctionRegistry.STANDARD_PACKAGE,
+        listOf("ITEM", "BUILDING", "LIQUID", "UNIT")
+    ))
 
     // MINDUSTRY FUNCTIONS
     standard.add(FunctionData("print", listOf(Type.ANY), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
@@ -117,11 +132,66 @@ private fun createStandardRegistry(instructionManager: InstructionManager): List
         null
     })
 
+    standard.add(FunctionData("radar",
+        listOf(Type.BUILDING, Type.enum("RadarTarget"), Type.enum("RadarTarget"), Type.enum("RadarTarget"),
+            Type.NUMBER, Type.enum("RadarSorting")),
+        Type.UNIT, FunctionRegistry.STANDARD_PACKAGE)
+    { params, dependedVariable ->
+        val variable = if (dependedVariable.variable != null){
+            dependedVariable.variable.used = true
+            dependedVariable.variable
+        } else
+            instructionManager.createBuffer(Type.UNIT)
+
+        val enumEntries = listOf(params[1], params[2], params[3], params[5])
+        if(enumEntries.any { !it.value.startsWith("\"") })
+            throw TranspileException("Enum options arguments must be direct constant values")
+
+        // FIX Ugly
+        enumEntries.forEach {
+            it.value = it.value.substring(1, it.value.length - 1).split(".")[1].lowercase()
+            it.value = if(it.value == "max_health") "maxHealth" else it.value   // Ugly
+        }
+
+        instructionManager.writeInstruction("radar # # # # # # #", params[1], params[2], params[3], params[5], params[0], params[4], variable)
+        variable
+    })
+
+    standard.add(FunctionData("lookup",
+        listOf(Type.enum("ContentType"), Type.NUMBER), Type.CONTENT, FunctionRegistry.STANDARD_PACKAGE)
+    { params, dependedVariable ->
+        val variable = if (dependedVariable.variable != null){
+            dependedVariable.variable.used = true
+            dependedVariable.variable
+        } else
+            instructionManager.createBuffer(Type.CONTENT)
+
+        if(!params[0].value.startsWith("\""))
+            throw TranspileException("Enum options arguments must be direct constant values")
+
+        params[0].value = params[0].value.substring(1, params[0].value.length - 1).split(".")[1].lowercase()
+
+        instructionManager.writeInstruction("lookup # # #", params[0], variable, params[1])
+        variable
+    })
+
     return standard
 }
 
 private fun createDrawModule(instructionManager: InstructionManager): List<FunctionData> {
     val result = ArrayList<FunctionData>()
+
+    result.add(FunctionData("packColor", listOf(Type.NUMBER, Type.NUMBER, Type.NUMBER, Type.NUMBER), Type.NUMBER, FunctionRegistry.STANDARD_PACKAGE)
+    { params, dependedVariable ->
+        val variable = if (dependedVariable.variable != null){
+            dependedVariable.variable.used = true
+            dependedVariable.variable
+        } else
+            instructionManager.createBuffer(Type.NUMBER)
+
+        instructionManager.writeInstruction("packcolor # # # # #", variable, *params)
+        variable
+    })
 
     result.add(FunctionData("clearDisplay", listOf(), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { _, _ ->
         instructionManager.writeInstruction("draw clear 0 0 0 0 0 0")
