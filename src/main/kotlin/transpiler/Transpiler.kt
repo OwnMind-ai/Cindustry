@@ -3,6 +3,7 @@ package org.cindustry.transpiler
 import org.cindustry.parser.*
 import org.cindustry.transpiler.instructions.Instruction
 import org.cindustry.transpiler.instructions.InstructionManager
+import org.cindustry.transpiler.instructions.InstructionsOptimizer
 import org.cindustry.transpiler.instructions.JumpInstruction
 import java.io.File
 import java.util.*
@@ -60,6 +61,8 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             // Redirects jump to the start, as if the program ended after jump firing
             it.invoke(firstId)
         }
+
+        InstructionsOptimizer.optimize(mainStream)
 
         return mainStream.joinToString("\n") { it.getCode(::getInstructionIndex) }
     }
@@ -141,7 +144,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     }
 
     private fun getInstructionIndex(id: Int): Int {
-        for (i in 0..mainStream.size)
+        for (i in 0..<mainStream.size)
             if (mainStream[i].id == id)
                 return i
 
@@ -195,9 +198,10 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         val conditionToken = OperationOptimizer.optimize(
                 OperationToken(OperatorToken("!"), OperationToken.EmptySide(), token.condition))
 
+        //TODO fix if ORIGINAL condition is 'true' (treat as always true if statement)
         val condition = transpileExpressionWithReference(conditionToken, DependedValue.createJump()).value
         val conditionJump =
-            JumpInstruction(if (condition == "true") "always" else condition, -1, nextId())
+            JumpInstruction(if (condition == "1") "always" else condition, -1, nextId())
         writeJumpInstruction(conditionJump)
 
         variableStack.add(token.doBlock, token)
