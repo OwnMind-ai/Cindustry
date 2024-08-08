@@ -9,6 +9,7 @@ void main(){
     // Fizz Buzz (kinda)
     const number n = 20;
     number o = 0;
+    n++;
 
     for(number i = 0; i < 4; i++)
         @cell1[i] = 0;

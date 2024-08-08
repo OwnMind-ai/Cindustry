@@ -2,11 +2,24 @@ package org.cindustry.parser
 
 import kotlin.math.min
 
-class CharStream(private val file: String) {
+class CharStream(private val file: String, val fileName: String) {
+    private val lines = file.split("\n")
+    var lineNumber = 0
+        private set
+    var columnNumber = 0
+        private set
+
     private var pointer: Int = 0
 
     fun next(): Char {
-        return file[pointer++]
+        val c = file[pointer++]
+        if (c == '\n'){
+            lineNumber++
+            columnNumber = 0
+        } else
+            columnNumber++
+
+        return c
     }
 
     fun peek(): Char {
@@ -27,5 +40,9 @@ class CharStream(private val file: String) {
             value += next()
 
         return value
+    }
+
+    fun getLine(): String{
+        return lines[lineNumber]
     }
 }

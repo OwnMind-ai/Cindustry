@@ -1,5 +1,6 @@
 package org.cindustry.transpiler
 
+import org.cindustry.exceptions.TranspileException
 import org.cindustry.parser.BlockToken
 import org.cindustry.parser.CodeBlockToken
 import org.cindustry.parser.FunctionDeclarationToken

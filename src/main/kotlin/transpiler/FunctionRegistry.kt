@@ -1,5 +1,6 @@
 package org.cindustry.transpiler
 
+import org.cindustry.exceptions.TranspileException
 import org.cindustry.parser.FunctionDeclarationToken
 import org.cindustry.transpiler.instructions.InstructionManager
 import java.util.*

@@ -1,11 +1,69 @@
 package org.cindustry.parser
 
+import org.cindustry.exceptions.ParserException
 import java.util.*
 
-interface Token{
-    fun assert(message: String = "Invalid token", predicate: (Token) -> Boolean){
-        if (!predicate.invoke(this))
-            throw ParserException(message)
+abstract class Token{
+    var lineNumber: Int? = null
+    var columnNumber: Int? = null
+    var line: String? = null
+    var tokenLength: Int? = null
+    var file: String? = null
+
+    open fun computeErrorData(){}
+}
+
+fun <T : Token> T.assert(message: String = "Invalid token", predicate: (T) -> Boolean){
+    if (!predicate.invoke(this))
+        throw ParserException(message, this)
+}
+
+fun <T : Token> T.loadData(stream: CharStream): T{
+    file = stream.fileName
+    line = stream.getLine()
+    columnNumber = stream.columnNumber
+    lineNumber = stream.lineNumber
+    return this
+}
+
+fun <T : Token> T.loadData(other: Token): T{
+    file = other.file
+    line = other.line
+    columnNumber = other.columnNumber
+    lineNumber = other.lineNumber
+    tokenLength = other.tokenLength
+    return this
+}
+
+fun <T : Token> T.lineNumber(lineNumber: Int): T{
+    this.lineNumber = lineNumber
+    return this
+}
+
+fun <T : Token> T.columnNumber(columnNumber: Int): T{
+    this.columnNumber = columnNumber
+    return this
+}
+
+fun <T : Token> T.line(line: String): T{
+    this.line = line
+    return this
+}
+
+fun <T : Token> T.tokenLength(length: Int): T{
+    this.tokenLength = length
+    return this
+}
+
+fun <T : Token> T.file(name: String): T{
+    this.file = name
+    return this
+}
+
+// Used for exceptions
+internal class DummyToken() : Token() {
+    constructor(stream: CharStream) : this() {
+        loadData(stream)
     }
 }
 
@@ -13,32 +71,28 @@ interface Token{
 
 data class WordToken(
     var word: String
-) : Token {
+) : Token() {
     companion object{
         val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
         val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as", "import")
     }
 
-    fun assertTypeKeyword() {
-        assert { TYPES.contains(word) }
-    }
-
     fun assertNotKeyword() {
-        assert{ !TYPES.contains(word) && !KEYWORDS.contains(word) }
+        assert("Symbol must not be a keyword") { !TYPES.contains(word) && !KEYWORDS.contains(word) }
     }
 }
 
 data class StringToken(
     var content: String
-) : ExpressionToken
+) : ExpressionToken()
 
 data class PunctuationToken(
     var character: String
-) : Token
+) : Token()
 
 data class OperatorToken(
     var operator: String
-) : Token {
+) : Token() {
     companion object{
         val ASSIGMENT_OPERATION: List<String> = listOf("=", "+=", "-=", "*=", "/=", "%=")
         val ASSIGMENT_INCREMENT_OPERATION: MutableList<String> = mutableListOf("++", "--")
@@ -79,20 +133,20 @@ data class OperatorToken(
 
 data class NumberToken(
     var number: String
-) : ExpressionToken
+) : ExpressionToken()
 
 data class BooleanToken(
     var value: Boolean
-) : ExpressionToken
+) : ExpressionToken()
 
 data class BuildingToken(
     var name: String
-) : ExpressionToken
+) : ExpressionToken()
 
 // PARSER LEVEL
 
-interface ExecutableToken : Token
-interface ExpressionToken : ExecutableToken
+abstract class ExecutableToken : Token()
+abstract class ExpressionToken : ExecutableToken()
 interface BlockToken{
     fun getAllExecutableTokens(): List<ExecutableToken>
 }
@@ -101,21 +155,26 @@ interface AssignableToken
 
 data class CodeBlockToken(
     var statements: List<ExecutableToken>
-) : Token
+) : Token()
 
 data class InitializationToken(
     var type: WordToken,
     var name: WordToken,
     var value: ExpressionToken?,
     var const: Boolean = false
-) : ExecutableToken
+) : ExecutableToken() {
+    override fun computeErrorData() {
+        name.computeErrorData()
+        file(name.file!!).lineNumber(name.lineNumber!!).line(name.line!!)
+    }
+}
 
 data class OperationToken(
     var operator: OperatorToken,
     var left: ExpressionToken,
     var right: ExpressionToken,
-) : ExpressionToken {
-    class EmptySide : ExpressionToken {
+) : ExpressionToken() {
+    class EmptySide : ExpressionToken() {
         override fun toString(): String {
             return "EMPTY SIDE"
         }
@@ -124,22 +183,56 @@ data class OperationToken(
     fun isFlat(): Boolean{
         return left !is OperationToken && left !is CallToken && right !is OperationToken && right !is CallToken
     }
+
+    override fun computeErrorData() {
+        right.computeErrorData()
+        operator.computeErrorData()
+        left.computeErrorData()
+
+        if (right is EmptySide)
+            loadData(left).tokenLength(operator.tokenLength!! + operator.columnNumber!! - left.columnNumber!!)
+        else if(left is EmptySide)
+            loadData(operator).tokenLength(right.tokenLength!! + right.columnNumber!! - operator.columnNumber!!)
+        else
+            loadData(left).tokenLength(right.tokenLength!! + right.columnNumber!! - left.columnNumber!!)
+    }
 }
 
 data class ArrayAccessToken(
     var array: ExpressionToken,
     var index: ExpressionToken
-) : ExpressionToken, AssignableToken
+) : ExpressionToken(), AssignableToken{
+    override fun computeErrorData() {
+        array.computeErrorData()
+        index.computeErrorData()
+        loadData(array).tokenLength(index.tokenLength!! + index.columnNumber!! - array.columnNumber!!)
+    }
+}
 
 data class FieldAccessToken(
     var from: ExpressionToken,
     var field: WordToken
-) : ExpressionToken, AssignableToken
+) : ExpressionToken(), AssignableToken{
+    override fun computeErrorData() {
+        field.computeErrorData()
+        from.computeErrorData()
+        loadData(from).tokenLength(field.tokenLength!! + field.columnNumber!! - from.columnNumber!!)
+    }
+}
 
 data class CallToken(
     var name: WordToken,
     var parameters: List<ExpressionToken>
-) : ExpressionToken
+) : ExpressionToken(){
+    override fun computeErrorData() {
+        name.computeErrorData()
+        loadData(name).tokenLength(name.tokenLength!! + 2)
+        parameters.lastOrNull()?.let {
+            it.computeErrorData()
+            tokenLength(it.columnNumber!! - name.columnNumber!! + it.tokenLength!! + 1)
+        }
+    }
+}
 
 interface NamedToken : AssignableToken{
     fun getName(): String
@@ -147,9 +240,14 @@ interface NamedToken : AssignableToken{
 
 data class VariableToken(
     var name: WordToken
-) : ExpressionToken, NamedToken {
+) : ExpressionToken(), NamedToken {
     override fun getName(): String {
         return name.word
+    }
+
+    override fun computeErrorData() {
+        name.computeErrorData()
+        loadData(name)
     }
 }
 
@@ -157,7 +255,7 @@ data class IfToken(
     var condition: ExpressionToken,
     var doBlock: CodeBlockToken,
     var elseBlock: CodeBlockToken?
-) : ExecutableToken, BlockToken {
+) : ExecutableToken(), BlockToken {
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return doBlock.statements + (elseBlock?.statements ?: listOf())
     }
@@ -167,7 +265,7 @@ data class WhileToken(
     var condition: ExpressionToken,
     var doBlock: CodeBlockToken,
     var isDoWhile: Boolean
-) : ExecutableToken, BlockToken {
+) : ExecutableToken(), BlockToken {
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return doBlock.statements + condition
     }
@@ -178,7 +276,7 @@ data class ForToken(
     var condition: ExpressionToken?,
     var after: ExecutableToken?,
     var doBlock: CodeBlockToken
-) : ExecutableToken, BlockToken{
+) : ExecutableToken(), BlockToken{
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         val result = ArrayList(doBlock.statements)
         if (initialization != null) result.add(initialization)
@@ -187,17 +285,25 @@ data class ForToken(
 
         return result
     }
-
 }
 
 data class ReturnToken(
     var type: WordToken,
     var value: ExpressionToken?
-) : ExecutableToken {
+) : ExecutableToken() {
     companion object{
         const val RETURN = "return"
         const val BREAK = "break"
         const val CONTINUE = "continue"
+    }
+
+    override fun computeErrorData() {
+        type.computeErrorData()
+        loadData(type)
+        if (value != null) {
+            value?.computeErrorData()
+            tokenLength(value?.tokenLength!! + value?.columnNumber!! - type.columnNumber!!)
+        }
     }
 }
 
@@ -205,14 +311,20 @@ data class ParameterToken(
     var type: WordToken,
     var name: WordToken,
     var const: Boolean? = null
-) : Token
+) : Token() {
+    override fun computeErrorData() {
+        type.computeErrorData()
+        name.computeErrorData()
+        loadData(type).tokenLength(name.tokenLength!! + name.columnNumber!! - type.columnNumber!!)
+    }
+}
 
 data class FunctionDeclarationToken(
     var name: WordToken,
     var returnType: WordToken,
     var parameters: List<ParameterToken>,
     var codeBlock: CodeBlockToken
-) : Token, BlockToken {
+) : Token(), BlockToken {
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return codeBlock.statements
     }
@@ -224,7 +336,7 @@ data class FileToken(
     var globalVariables: MutableList<InitializationToken>,
     var enums: MutableList<EnumToken>,
     var functions: MutableList<FunctionDeclarationToken>
-) : Token {
+) : Token() {
     override fun toString(): String {
         return "FILE($functions)"
     }
@@ -232,12 +344,22 @@ data class FileToken(
 
 data class ImportToken (
     var path: List<Token>
-) : Token
+) : Token() {
+    override fun computeErrorData() {
+        path.first().computeErrorData()
+        file(path.first().file!!).lineNumber(path.first().lineNumber!!).line(path.first().line!!)
+    }
+}
 
 data class EnumToken (
     var name: WordToken,
     var values: List<WordToken>
-) : Token
+) : Token() {
+    override fun computeErrorData() {
+        name.computeErrorData()
+        file(name.file!!).lineNumber(name.lineNumber!!).line(name.line!!)
+    }
+}
 
 fun nextChildToken(t: Token) = when (t) {
     is OperationToken -> listOf(t.left, t.right)

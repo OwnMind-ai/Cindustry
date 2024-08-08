@@ -1,15 +1,14 @@
 package parser
 
 import org.cindustry.parser.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-
-import org.junit.jupiter.api.Assertions.*
 
 class LexerTest {
 
     @Test
     fun simple() {
-        val lexer = Lexer(CharStream("word /* comment */ 1 ,-.24 .25 // comment\n + >= a. word(); \"abc\""))
+        val lexer = Lexer(CharStream("word /* comment */ 1 ,-.24 .25 // comment\n + >= a. word(); \"abc\"", "test.cind"))
 
         var next = lexer.next()
         assertEquals(WordToken("word"), next)

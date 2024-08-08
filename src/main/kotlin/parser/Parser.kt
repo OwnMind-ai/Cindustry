@@ -1,8 +1,10 @@
 package org.cindustry.parser
 
+import org.cindustry.exceptions.ParserException
+
 class Parser(private val lexer: Lexer) {
     fun parse(fileName: String): FileToken{
-        val result = FileToken(fileName, ArrayList(), ArrayList(), ArrayList(), ArrayList())
+        val result = FileToken(fileName, ArrayList(), ArrayList(), ArrayList(), ArrayList()).file(fileName)
         while (!lexer.ended())
             parseOnFileLevel(result)
 
@@ -15,18 +17,23 @@ class Parser(private val lexer: Lexer) {
             when (wordToken.word) {
                 "use" -> {
                     lexer.next()
-                    lexer.strictNext<OperatorToken>().assert { (it as OperatorToken).operator == "@" }
-                    val name = lexer.strictNext<WordToken>()
+
+                    val message = "Building name must be preceded by '@' operator"
+                    lexer.strictNext<OperatorToken>(message).assert(message) { it.operator == "@" }
+
+                    val name = lexer.strictNext<WordToken>("Invalid building name")
                     name.assertNotKeyword()
 
-                    lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+                    lexer.strictNext<PunctuationToken>("Semicolon expected")
+                        .also { it.assert { i -> i.character == ";" } }
+                        .columnNumber
 
                     file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
                 }
                 "global" -> {
                     lexer.next()
                     file.globalVariables.add(parseInitialization(lexer.strictNext()))
-                    lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+                    lexer.strictNext<PunctuationToken>("Semicolon expected").assert { it.character == ";" }
                 }
                 "enum" -> {
                     lexer.next()
@@ -47,7 +54,7 @@ class Parser(private val lexer: Lexer) {
                         if (token is WordToken || (token as? PunctuationToken)?.character == ".")
                             result.add(token)
                         else
-                            throw ParserException("Invalid import statement")
+                            throw ParserException("Invalid import statement", token)
                     }
 
                     lexer.strictNext<PunctuationToken>()
@@ -63,8 +70,8 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseFunction(): FunctionDeclarationToken {
-        val returnType = lexer.strictNext<WordToken>()
-        val name = lexer.strictNext<WordToken>()
+        val returnType = lexer.strictNext<WordToken>("Invalid return type")
+        val name = lexer.strictNext<WordToken>("Invalid name")
         val parameters = parseParameters()
         val code = parseCodeBlock()
 
@@ -80,9 +87,9 @@ class Parser(private val lexer: Lexer) {
             val line = parseExpression()
 
             if (line !is BlockToken)
-                lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ";" }
+                lexer.strictNext<PunctuationToken>().assert { it.character == ";" }
 
-            CodeBlockToken(mutableListOf(line))
+            CodeBlockToken(mutableListOf(line)).loadData(line)
         }
     }
 
@@ -92,8 +99,9 @@ class Parser(private val lexer: Lexer) {
                 separatorIgnorePredicate = { it is BlockToken && (it !is WhileToken || !it.isDoWhile) })
         )
 
-        if (token.statements.withIndex().any { it.value is ReturnToken && it.index < token.statements.size - 1})
-            throw ParserException("Unreachable statement")
+        token.statements.withIndex().find { it.value is ReturnToken && it.index < token.statements.size - 1}?.let {
+            throw ParserException("Unreachable statement", token.statements[it.index + 1])
+        }
 
         return token
     }
@@ -115,7 +123,7 @@ class Parser(private val lexer: Lexer) {
 
                 val right = buildExpressionTree(tryParseExpression(), operator.getPriority())
                 if (right !is ExpressionToken)
-                    throw ParserException("Invalid token, expression was expected")
+                    throw ParserException("Invalid token, expression was expected", right)
 
                 return buildExpressionTree(OperationToken(operator, token, right), currentPriority)
             }
@@ -125,7 +133,7 @@ class Parser(private val lexer: Lexer) {
             field.assertNotKeyword()
 
             if (token !is VariableToken && token !is CallToken && token !is FieldAccessToken && token !is BuildingToken)
-                throw ParserException("Unable to access field '${field.word}'")
+                throw ParserException("Unable to access field '${field.word}'", field)
 
             return buildExpressionTree(FieldAccessToken(token, field), 0)
         } else if (token is ExpressionToken && (lexer.peek() as? PunctuationToken)?.character == "[")
@@ -143,11 +151,11 @@ class Parser(private val lexer: Lexer) {
             lexer.next()
             val right = if(current.operator in listOf("@", "++", "--")){
                 val next = lexer.next()
-                if (next !is WordToken) throw ParserException("Invalid operator use")
+                if (next !is WordToken) throw ParserException("Invalid operator use", next)
 
                 val result = parseWordToken(next)
                 if (result !is VariableToken)
-                    throw ParserException("Invalid operator use")
+                    throw ParserException("Invalid operator use", result)
 
                 if (current.operator == "@")
                     return BuildingToken(result.getName())
@@ -157,10 +165,10 @@ class Parser(private val lexer: Lexer) {
                 parseExpression()
 
             if (listOf("@", "++", "--").contains(current.operator) && right !is VariableToken)
-                throw ParserException("Invalid operator use")
+                throw ParserException("Invalid operator use", current)
 
             if (right !is ExpressionToken)
-                throw ParserException("Invalid token, expression was expected")
+                throw ParserException("Invalid token, expression was expected", right)
 
             return OperationToken(current, if(current.operator in listOf("-", "+")) NumberToken("0") else OperationToken.EmptySide(), right)
         }
@@ -172,7 +180,7 @@ class Parser(private val lexer: Lexer) {
         if (current is PunctuationToken && current.character == "("){
             lexer.next()
             val expression = parseExpression()
-            lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == ")" }
+            lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
 
             return expression
         }
@@ -180,7 +188,7 @@ class Parser(private val lexer: Lexer) {
         if (current is ExecutableToken)
             return lexer.next() as ExecutableToken
 
-        throw ParserException("Unexpected token")
+        throw ParserException("Unexpected token", current)
     }
 
     private fun parseWordToken(current: WordToken): ExecutableToken {
@@ -195,20 +203,24 @@ class Parser(private val lexer: Lexer) {
                 current,
                 if (lexer.peek() is PunctuationToken) {
                     null
-                } else {
+                }  else {
                     val expression = parseExpression()
+
+                    if (current.word != "return")
+                        throw ParserException("Invalid ${current.word} statement", expression)
+
                     if (expression !is ExpressionToken)
-                        throw ParserException("Invalid token, expression was expected")
+                        throw ParserException("Invalid token, expression was expected", expression)
 
                     expression
                 }
             )
         }
 
-        if (current.word == "for") return parseFor()
-        if (current.word == "while") return parseWhile()
-        if (current.word == "do") return parseDoWhile()
-        if (current.word == "if") return parseIf()
+        if (current.word == "for") return parseFor().loadData(current)
+        if (current.word == "while") return parseWhile().loadData(current)
+        if (current.word == "do") return parseDoWhile().loadData(current)
+        if (current.word == "if") return parseIf().loadData(current)
 
         if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == "(")
             return this.parseCall(current)
@@ -217,17 +229,18 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseArrayAccess(token: ExpressionToken): ArrayAccessToken {
-        lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == "[" }
-        val index = this.parseExpression() as? ExpressionToken ?: throw ParserException("Invalid array index")
-        lexer.strictNext<PunctuationToken>().assert { (it as PunctuationToken).character == "]" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == "[" }
+        val expression = this.parseExpression()
+        val index = if (expression is ExpressionToken) expression else throw ParserException("Invalid array index", expression)
+        lexer.strictNext<PunctuationToken>().assert { it.character == "]" }
 
         return ArrayAccessToken(token, index)
     }
 
     private fun parseIf(): IfToken {
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == "(" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == "(" }
         val condition = parseExpression()
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == ")" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
 
         val doBlock = parseBody()
         var elseBlock: CodeBlockToken? = null
@@ -238,18 +251,18 @@ class Parser(private val lexer: Lexer) {
         }
 
         if (condition !is ExpressionToken)
-            throw ParserException("Invalid token, expression was expected")
+            throw ParserException("Invalid token, expression was expected", condition)
 
         return IfToken(condition, doBlock, elseBlock)
     }
 
     private fun parseWhile(): WhileToken {
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == "(" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == "(" }
         val condition = parseExpression()
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == ")" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
 
         if (condition !is ExpressionToken)
-            throw ParserException("Invalid token, expression was expected")
+            throw ParserException("Invalid token, expression was expected", condition)
 
         return WhileToken(condition, parseBody(), false)
     }
@@ -257,13 +270,13 @@ class Parser(private val lexer: Lexer) {
     private fun parseDoWhile(): WhileToken {
         val doBlock = parseBody()
 
-        lexer.strictNext<WordToken>().assert { it is WordToken && it.word == "while" }
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == "(" }
+        lexer.strictNext<WordToken>().assert { it.word == "while" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == "(" }
         val condition = parseExpression()
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == ")" }
+        lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
 
         if (condition !is ExpressionToken)
-            throw ParserException("Invalid token, expression was expected")
+            throw ParserException("Invalid token, expression was expected", condition)
 
         return WhileToken(condition, doBlock, true)
     }
@@ -278,7 +291,7 @@ class Parser(private val lexer: Lexer) {
         if (header.size !in 2..3) throw ParserException("Invalid for statement")
 
         if (header[1] != null && header[1] !is ExpressionToken)
-            throw ParserException("Invalid token, expression was expected")
+            throw ParserException("Invalid token, expression was expected", header[1])
 
         return ForToken(header[0], header[1] as ExpressionToken?, header.getOrNull(2), parseBody())
     }
@@ -286,8 +299,9 @@ class Parser(private val lexer: Lexer) {
     private fun parseCall(token: WordToken): ExecutableToken {
         val parameters = delimiter("(", ",", ")", ::parseExpression)
 
-        if (parameters.any { it !is ExpressionToken })
-            throw ParserException("Invalid token, expression was expected")
+        parameters.find { it !is ExpressionToken }?.let {
+            throw ParserException("Invalid token, expression was expected", it)
+        }
 
         return CallToken(token, parameters.map { it as ExpressionToken })
     }
@@ -307,7 +321,7 @@ class Parser(private val lexer: Lexer) {
             lexer.next()
             value = this.parseExpression()
             if (value !is ExpressionToken)
-                throw ParserException("Invalid token, expression was expected")
+                throw ParserException("Invalid token, expression was expected", value)
         }
 
         return InitializationToken(type, name, value as ExpressionToken?, const)
@@ -341,7 +355,7 @@ class Parser(private val lexer: Lexer) {
                             return@executeDeep
 
                     if (param?.const == true)
-                        throw ParserException("Constant modified")
+                        throw ParserException("Constant modified", if (it.left is VariableToken) it.left else it.right)
 
                     param?.const = false
                 }
@@ -351,14 +365,13 @@ class Parser(private val lexer: Lexer) {
         parameters.filter { it.const == null }.forEach{ it.const = true }
     }
 
-
-
     private fun <T: Token?> delimiter(start: String, separator: String, end: String, parser: () -> T, separatorIgnorePredicate: (T) -> Boolean = { false }): List<T>{
         val result: MutableList<T> = ArrayList()
-        lexer.strictNext<PunctuationToken>().assert { it is PunctuationToken && it.character == start }
+        val opened = lexer.strictNext<PunctuationToken>()
+        opened.assert { it.character == start }
 
         var endSkipped = false
-        while (lexer.peek() !is PunctuationToken || (lexer.peek() as PunctuationToken).character != end){
+        while (!lexer.ended() && (lexer.peek() !is PunctuationToken || (lexer.peek() as PunctuationToken).character != end)){
             val element = parser.invoke()
             result.add(element)
 
@@ -366,7 +379,7 @@ class Parser(private val lexer: Lexer) {
                 if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == end) break
             } else {
                 val next = lexer.strictNext<PunctuationToken>()
-                next.assert { it is PunctuationToken && (it.character == separator || it.character == end) }
+                next.assert { it.character == separator || it.character == end }
 
                 if (next.character == end) {
                     endSkipped = true
@@ -374,6 +387,9 @@ class Parser(private val lexer: Lexer) {
                 }
             }
         }
+
+        if (!endSkipped && lexer.ended())
+            throw ParserException("Reached the end of file while searching for '${end}'", opened)
 
         if (!endSkipped && lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == end)
             lexer.next()

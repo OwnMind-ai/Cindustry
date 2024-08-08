@@ -1,5 +1,7 @@
 package org.cindustry.parser
 
+import org.cindustry.exceptions.ParserException
+
 class Lexer(private val stream: CharStream) {
     companion object {
         const val WHITESPACES = " \n\t\r"
@@ -26,10 +28,10 @@ class Lexer(private val stream: CharStream) {
         return last ?: throw ParserException("EOF")
     }
 
-    inline fun <reified T: Token> strictNext(): T {
+    inline fun <reified T: Token> strictNext(message: String = "Unexpected token"): T {
         val token = next()
         if (token !is T)
-            throw ParserException("Unexpected token")
+            throw ParserException(message, token)
 
         return token
     }
@@ -43,7 +45,7 @@ class Lexer(private val stream: CharStream) {
         return previous
     }
 
-    fun ended(): Boolean = stream.ended()
+    fun ended(): Boolean = stream.ended() && last == null
 
     private fun parseToken(): Token{
         skipUnimportantCharacters()
@@ -61,9 +63,9 @@ class Lexer(private val stream: CharStream) {
             return this.parseOperator()
 
         if (this.canParsePunctuation())
-            return PunctuationToken(stream.next().toString())
+            return PunctuationToken(stream.next().toString()).loadData(stream).columnNumber(stream.columnNumber - 1)
 
-        throw ParserException("Invalid token")
+        throw ParserException("Invalid token", DummyToken(stream))
     }
 
     private fun canParseString(): Boolean = stream.peek() == '"'
@@ -71,10 +73,15 @@ class Lexer(private val stream: CharStream) {
     private fun parseString(): StringToken {
         stream.next()
 
-        val result = stream.takeWhile { it != '"' }
+        val start = stream.columnNumber - 1
+        val result = stream.takeWhile {
+            if (it == '\n') throw ParserException("Unterminated string literal", DummyToken(stream).columnNumber(start))
+            it != '"'
+        }
         stream.next()
 
-        return StringToken(result)
+        return StringToken(result).file(stream.fileName)
+            .loadData(stream).columnNumber(start).tokenLength(result.length + 2)
     }
 
     private fun canParsePunctuation(): Boolean = PUNCTUATIONS.contains(stream.peek())
@@ -83,21 +90,24 @@ class Lexer(private val stream: CharStream) {
 
     private fun parseOperator(): OperatorToken {
         val operator = stream.takeWhile { OPERATOR_CHARS.contains(it) }
-        if (!OPERATORS.contains(operator))
-            throw ParserException("Invalid operator: $operator")
+        val result = OperatorToken(operator).loadData(stream)
+            .columnNumber(stream.columnNumber - operator.length).tokenLength(operator.length)
 
-        return OperatorToken(operator)
+        if (!OPERATORS.contains(operator))
+            throw ParserException("Invalid operator '$operator'", result)
+
+        return result
     }
 
     private fun canParseWord(): Boolean = stream.peek().isLetter()
 
     private fun parseWord(): WordToken {
-        val token = WordToken("")
+        val token = WordToken("").loadData(stream)
 
         while (stream.peek().isLetter() || stream.peek().isDigit() || stream.peek() == '_')
             token.word += stream.next().toString()
 
-        return token
+        return token.tokenLength(token.word.length)
     }
 
     private fun canParseNumber(): Boolean = stream.peek().isDigit() || (last !is WordToken && stream.peek() == '.')
@@ -106,6 +116,7 @@ class Lexer(private val stream: CharStream) {
 
     private fun parseNumber(): NumberToken {
         var isNegative = false
+        val start = stream.columnNumber
         if (stream.peek() == '-') {
             isNegative = true
             stream.next()
@@ -125,12 +136,18 @@ class Lexer(private val stream: CharStream) {
                 fractionPart += stream.next()
         }
 
-        if (intPart.isEmpty() && fractionPart == null)
-            throw ParserException("Invalid number format")  //TODO add code position
+        if (intPart.isEmpty() && fractionPart.isNullOrEmpty())
+            throw ParserException("Invalid number format", DummyToken(stream).tokenLength(stream.columnNumber - start).columnNumber(start))
         else if (intPart.isEmpty())
             intPart = "0"
 
-        return NumberToken((if (isNegative) "-" else "") + if (fractionPart == null) intPart else "$intPart.$fractionPart")
+        if (stream.peek() == '.')
+            throw ParserException("Invalid number format", DummyToken(stream))
+
+        val numberToken =
+            NumberToken((if (isNegative) "-" else "") + if (fractionPart == null) intPart else "$intPart.$fractionPart")
+
+        return numberToken.loadData(stream).columnNumber(start).tokenLength(numberToken.number.length)
     }
 
     private fun skipUnimportantCharacters() {

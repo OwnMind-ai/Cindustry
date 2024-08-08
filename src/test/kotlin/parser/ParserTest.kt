@@ -14,6 +14,10 @@ class ParserTest {
             use @message1; 
             global const number a;
             
+            enum Enum {
+                FIRST, SECOND
+            }
+            
             void main(){
                 @cell1[0];
                 const Enum g = Enum.FIRST;
@@ -37,13 +41,9 @@ class ParserTest {
             Enum foo(const number a, number b, number c){
                 return b++; 
             }
-            
-            enum Enum {
-                FIRST, SECOND
-            }
         """.trimIndent()
 
-        val parser = Parser(Lexer(CharStream(file)))
+        val parser = Parser(Lexer(CharStream(file, "test.cind")))
 
         assertEquals(FileToken(
             "test",
