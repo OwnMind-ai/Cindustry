@@ -131,6 +131,10 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             } else {
                 val path = import.path.joinToString { if (it is WordToken) it.word else "/" } + ".cind"
                 val file = File(directory, path)
+
+                if (!file.exists() || !file.isFile)
+                    throw TokenException(TokenException.IMPORT, "Module '$fileName' wasn't found at '${file.absoluteFile}'", import)
+
                 files.add(getParsed(file))
             }
         }
