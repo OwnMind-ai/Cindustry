@@ -1,0 +1,29 @@
+// This program is used to turn of thorium reactors in case of low coolant level.
+// In addition, the program prints coolant level in percentages and paints adjacent screen red to alert players
+
+import draw;  // Imports module that contains necessary functions to work with displays
+import math;
+
+use @message1;
+use @reactor1;
+use @display1;
+
+global const number THRESHOLD = 0.25;   // In percents
+
+void main(){
+    number level = @reactor1.totalLiquids / @reactor1.liquidCapacity;
+
+    print("Coolant Level: ");
+    print(ceil(level * 100));
+    print("%", @message1);
+
+    if(level <= THRESHOLD){
+        @reactor1.enabled = false;
+        clearDisplay(255, 0, 0);
+    } else {
+        @reactor1.enabled = true;
+        clearDisplay();
+    }
+
+    drawFlush(@display1);
+}

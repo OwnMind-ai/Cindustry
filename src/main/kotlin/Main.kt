@@ -35,7 +35,7 @@ fun main(args: Array<String>) {
     }
 
     val mainFile = File(arguments[null]!!)
-    if (!mainFile.exists() || mainFile.isDirectory){
+    if (!mainFile.exists() || !mainFile.isFile){
         System.err.println("Main file '${arguments[null]}' doesn't exists\n\nUse --help for more info")
         return
     }

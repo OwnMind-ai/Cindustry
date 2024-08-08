@@ -1,0 +1,23 @@
+use @message1;  // Denotes that this program will use 'message1' building
+
+void main(){
+    const number n = 32;
+
+    for(number i = 0; i < n; i++){
+        any result = i;       // Creates variable that can contain any type of value
+
+        if(i % 5 == 0 && i % 3 == 0) {
+            result = "FizzBuzz";
+        } else if (i % 3 == 0) {
+            result = "Fizz";
+        } else if (i % 5 == 0){
+            result = "Buzz";
+        }
+
+        print(result);
+        print(", ");
+    }
+
+    printFlush(@message1);
+    stop();   // Stops the processor from cycling
+}

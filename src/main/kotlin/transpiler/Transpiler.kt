@@ -301,12 +301,12 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     ): TypedExpression? {
         if (variableStack.blockStack.filter { it.parentToken != null && it.parentToken is FunctionDeclarationToken }
                 .any { (it.parentToken as FunctionDeclarationToken).name == token.name })
-            throw TokenException(TokenException.SYNTAX, "Recursions are not allowed in this version", token)
+            throw TokenException(TokenException.SYNTAX, "Recursions are not allowed", token)
 
         val parameters = token.parameters.map { transpileExpressionWithReference(it) }
 
         val function = functionRegistry.getFunctionData(token.name.word, parameters.map { it.type })
-                       ?: throw TokenException(TokenException.NAME,"Function '${token.name.word}' is not defined", token.name)
+                       ?: throw TokenException(TokenException.NAME,"Function '${token.name.word}(${parameters.joinToString(",") { it.type.name.lowercase() }})' is not defined", token.name)
 
         val result = if (function.transpilationFunction != null){
             function.transpilationFunction.invoke(parameters.toTypedArray(), dependedVariable)
