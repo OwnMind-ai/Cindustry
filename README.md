@@ -3,38 +3,47 @@ A C-like programming language that compiles to the Mindustry processors language
 making it intuitive for developers familiar with C syntax.
 
 ## Quick Start
-### 1. Main function
-As in most C-like languages, Cindustry's scripts entry point is at the **main** function.
+
+### 1. Main Function
+
+In **Cindustry**, similar to many C-like languages, the entry point for scripts is the `main` function:
+
 ```cindustry
-void main(){
+void main() {
     // Your code starts here
 }
 ```
-However, unlike in other languages, the main function always **cycles**.
-Processors in Mindustry by design repeatedly execute their program,
-which is useful for the most situations in the game.
-Cindustry aims to preserve this trait with its main function.
-However, if the situation requires a single run of the program,
-the developer can add `stop()` function call at the end of the main function.
-Return statement, on the other hand, corresponds to `end` instruction in Mindustry processors.
+
+However, unlike in most languages, the `main` function in Cindustry **cycles continuously**.
+This behavior reflects how Mindustry's processors are designed to repeatedly execute their instructions,
+which is often beneficial for various in-game scenarios.
+
+Cindustry retains this trait to align with the game’s mechanics.
+If you need the program to execute only once,
+you can call the `stop()` function at the end of the `main` function to halt further cycles.
+
+Additionally, the `return` statement in Cindustry corresponds to the `end` instruction in Mindustry processors,
+providing control over when a process terminates.
 ### 2. Variables
-All variables must be preceded by its **type**.
-Variables them self are not required to be initialized right-away,
-but must be initialized before any operations with them.
-To make variables immutable, use `const` before the variable declaration.
+
+All variables must be declared with their respective **type**. 
+While variables don't need to be initialized at the time of declaration, 
+they must be initialized before being used in any operations. 
+To define an immutable variable, use the `const` keyword before the declaration.
+
 ```cindustry
-void main(){
-    number a = 0;
+void main() {
+    number a = 0;  // Initialized during declaration
     
     string b; 
-    b = "abs";
+    b = "abs";     // Initialized later
     
-    const bool c = true;
+    const bool c = true;  // Immutable variable
 }
 ```
 ### 2.1. Types
 Cindustry operates within the same types as Mindustry does,
-so variables can be of these types: `number`, `string`, `building`, `content`, `unit`.
+including: `number`, `string`, `building`, `content`, `unit`.
 However, Cindustry adds new types in favor of type safety:
 1. `any` — variables of this type will avoid type checks and can hold any value
 2. `bool` — represents boolean value, corresponds to numeric 0 and 1 in Mindusty, used for conditions
@@ -43,9 +52,9 @@ However, Cindustry adds new types in favor of type safety:
 
 ### 2.2 Global variables
 Global variables are the variables defined outside the main function, and must be preceded with `global` keyword.
-Regular variables that are defined in the main function will erase their value after the cycle.
+Regular variables that are defined in the main function will reinitialize their value after each **cycle**.
 Global variables will not.
-In addition, global variables could be used in any function within the same module
+In addition, global variables could be used in any function within the same module.
 
 ```cindustry
 global const number MAX = 100;
@@ -58,12 +67,12 @@ void main(){
 
 ### 3. Loops and branching
 Modern languages don't use jumps and gotos for a reason.
-Cindustry features C-style loops, like while, do-while and for, as well as if and if-else statements.
+Cindustry features C-style loops, such as while, do-while and for, as well as if and if-else statements.
 In addition to them, Cindustry also has break and continue statements.
 See [FizzBuzz example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd3383b585a4259254561b5c92335e4f/examples/fizzbuzz.cind).
 
 ### 4. Buildings and Memory
-Before buildings that are connected to the processor can be used, the developer must specify their existence:
+Before buildings that are connected to the processor can be used, the developer must declare their existence:
 ```cindusty
 // use @[BUILDING NAME]
 use @message1;
@@ -95,7 +104,7 @@ number a = @cell1[0];
 number b = @cell1[index];
 @cell1[index] = c;
 ```
-### 5. Function call's
+### 5. Function calls
 Cindustry has typical for C-like languages function call syntax:
 ```cindustry
 number a = call(param1, param2);

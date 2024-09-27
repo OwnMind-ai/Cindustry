@@ -52,7 +52,7 @@ fun main(args: Array<String>) {
             println(result)
         }
     } catch (e: TokenException){
-        System.err.println(e.toString())
+        System.err.println(e)
         return
     }
 }

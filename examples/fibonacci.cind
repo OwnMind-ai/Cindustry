@@ -1,4 +1,4 @@
-// This program will print all B numbers in fibonacci sequence every second and store them in cell1
+// This program will print all N numbers in fibonacci sequence every second and store them in cell1
 
 use @cell1;
 use @message1;
