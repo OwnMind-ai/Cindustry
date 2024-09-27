@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "org.cindustry"
-version = "1.0-SNAPSHOT"
+version = "1.0"
 
 repositories {
     mavenCentral()
@@ -19,5 +19,24 @@ tasks.test {
     useJUnitPlatform()
 }
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(8)
+}
+
+tasks.register<Jar>("cind") {
+    archiveClassifier.set("cind")
+
+    manifest {
+        attributes(
+            "Main-Class" to "org.cindustry.MainKt",
+            "Implementation-Title" to "Gradle",
+            "Implementation-Version" to archiveVersion
+        )
+    }
+
+    from(sourceSets.main.get().output)
+
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+    })
 }
