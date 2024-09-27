@@ -1,7 +1,18 @@
 # Cindustry
-A C-like programming language that compiles to the Mindustry processors language,
-making it intuitive for developers familiar with C syntax.
+**Cindustry** is a C-like language that compiles into Mindustry processor code, offering a familiar, intuitive syntax for building in-game automation and logic.
+## Usage
 
+Download the [latest release](https://github.com/OwnMind-ai/Cindustry/releases) archive and extract it.
+
+To execute a Cindustry script, run the following command on Linux:
+```shell
+./cind main.cind
+```
+For Windows, use the batch file:
+```batch
+cind.bat main.cind
+```
+Run with `-h` or `--help` for more details.
 ## Quick Start
 
 ### 1. Main Function
