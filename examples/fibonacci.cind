@@ -1,7 +1,7 @@
 // This program will print all N numbers in fibonacci sequence every second and store them in cell1
 
-use @cell1;
-use @message1;
+use cell1;
+use message1;
 
 global const number N = 32;
 
@@ -11,14 +11,14 @@ global number counter = 0;
 // Unless stopped, main function always cycles naturally as processor does
 void main(){
     if(counter == 0)
-        @cell1[0] = @cell1[1] = 1;   // Sets first two values on the first run
+        cell1[0] = cell1[1] = 1;   // Sets first two values on the first run
 
     if(counter == N - 1)
         stop();     // Stops the program after running out of space
 
-    @cell1[counter + 2] = @cell1[counter] + @cell1[counter + 1];
+    cell1[counter + 2] = cell1[counter] + cell1[counter + 1];
 
-    print(@cell1[counter + 2], @message1);  // Prints new value to message1
+    print(cell1[counter + 2], message1);  // Prints new value to message1
 
     counter++;
     wait(1);

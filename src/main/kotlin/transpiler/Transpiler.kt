@@ -269,7 +269,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         variableStack.remove(token.doBlock)
 
         val conditionJump =
-            JumpInstruction(if (condition == "true") "always" else condition, startId!!, nextId())
+            JumpInstruction(if (condition == "true") "always" else condition, startId, nextId())
         writeJumpInstruction(conditionJump)
 
         jumpToConditionInstruction?.jumpToId = conditionId ?: throw TokenException(TokenException.SYNTAX,"Illegal while block", token)
@@ -769,7 +769,6 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     private fun getReturnType(token: OperationToken): Type {
         return when(token.operator.operator){
             "=" -> (token.left as? VariableToken)?.name?.word?.let { getVariable(it, token).getTyped().type } ?: Type.ANY
-            "@" -> Type.BUILDING
             "+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "++", "--", ">>", "<<" -> Type.NUMBER
             ">", "<", ">=", "<=", "==", "===", "!=", "!", "&&", "||", "&", "|" -> Type.BOOL
             else -> throw IllegalArgumentException()

@@ -11,7 +11,7 @@ class ParserTest {
         val file = """
             import math.pow;
             
-            use @message1; 
+            use message1; 
             global const number a;
             
             enum Enum {
@@ -19,7 +19,7 @@ class ParserTest {
             }
             
             void main(){
-                @cell1[0];
+                cell1[0];
                 const Enum g = Enum.FIRST;
                 number x = a++ * 4;
                 
@@ -28,10 +28,10 @@ class ParserTest {
 
                 for (x = 0; x < 4; x++) {
                     // Comment
-                    print(x++, @message1);
+                    print(x++, message1);
                     wait(.5);
                     
-                    x = a = @object.heat;
+                    x = a = object.heat;
                     if(x == x + a * 10 + 5){
                         break;
                     }
@@ -55,7 +55,7 @@ class ParserTest {
             mutableListOf(EnumToken(WordToken("Enum"), listOf(WordToken("FIRST"), WordToken("SECOND")))),
             mutableListOf(
             FunctionDeclarationToken(WordToken("main"), WordToken("void"), listOf(), CodeBlockToken(listOf(
-                ArrayAccessToken(BuildingToken("cell1"), NumberToken("0")),
+                ArrayAccessToken(VariableToken(WordToken("cell1")), NumberToken("0")),
                 InitializationToken(WordToken("Enum"), WordToken("g"), FieldAccessToken(VariableToken(WordToken("Enum")), WordToken("FIRST")), const = true),
                 InitializationToken(WordToken("number"), WordToken("x"), OperationToken(
                     OperatorToken("*"), OperationToken(OperatorToken("++"), VariableToken(WordToken("a")), OperationToken.EmptySide()), NumberToken("4"))),
@@ -70,13 +70,13 @@ class ParserTest {
 
                     CodeBlockToken(listOf(
                     CallToken(WordToken("print"), listOf(OperationToken(OperatorToken("++"), VariableToken(
-                        WordToken("x")), OperationToken.EmptySide()), BuildingToken("message1")
-                    )),
+                        WordToken("x")), OperationToken.EmptySide()), VariableToken(WordToken("message1")))
+                    ),
 
                     CallToken(WordToken("wait"), listOf(NumberToken("0.5"))),
                     OperationToken(OperatorToken("="), VariableToken(WordToken("x")),
                         OperationToken(OperatorToken("="), VariableToken(WordToken("a")),
-                            FieldAccessToken(BuildingToken("object"), WordToken("heat")))),
+                            FieldAccessToken(VariableToken(WordToken("object")), WordToken("heat")))),
 
                     IfToken(OperationToken(OperatorToken("=="), VariableToken(WordToken("x")),
                         OperationToken(OperatorToken("+"), VariableToken(WordToken("x")),

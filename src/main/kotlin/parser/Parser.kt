@@ -18,15 +18,11 @@ class Parser(private val lexer: Lexer) {
                 "use" -> {
                     lexer.next()
 
-                    val message = "Building name must be preceded by '@' operator"
-                    lexer.strictNext<OperatorToken>(message).assert(message) { it.operator == "@" }
-
                     val name = lexer.strictNext<WordToken>("Invalid building name")
                     name.assertNotKeyword()
 
                     lexer.strictNext<PunctuationToken>("Semicolon expected")
                         .also { it.assert { i -> i.character == ";" } }
-                        .columnNumber
 
                     file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
                 }
@@ -149,7 +145,7 @@ class Parser(private val lexer: Lexer) {
             current.assertUnary()
 
             lexer.next()
-            val right = if(current.operator in listOf("@", "++", "--")){
+            val right = if(current.operator in listOf("++", "--")){
                 val next = lexer.next()
                 if (next !is WordToken) throw ParserException("Invalid operator use", next)
 
@@ -157,14 +153,11 @@ class Parser(private val lexer: Lexer) {
                 if (result !is VariableToken)
                     throw ParserException("Invalid operator use", result)
 
-                if (current.operator == "@")
-                    return BuildingToken(result.getName())
-                else
-                    result
+                result
             } else
                 parseExpression()
 
-            if (listOf("@", "++", "--").contains(current.operator) && right !is VariableToken)
+            if (listOf("++", "--").contains(current.operator) && right !is VariableToken)
                 throw ParserException("Invalid operator use", current)
 
             if (right !is ExpressionToken)
@@ -192,7 +185,7 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseWordToken(current: WordToken): ExecutableToken {
-        if (current.word == "const" || ((current as? WordToken)?.word !in WordToken.KEYWORDS && lexer.peek() is WordToken))  // For enums and structs
+        if (current.word == "const" || (current.word !in WordToken.KEYWORDS && lexer.peek() is WordToken))  // For enums and structs
             return this.parseInitialization(current)
 
         if (current.word == "true" || current.word == "false")

@@ -112,13 +112,12 @@ data class OperatorToken(
             "+", "-" -> 10
             "*", "/", "%", ">>", "<<" -> 20
             "++", "--" -> 30
-            "@" -> 50
             else -> Int.MIN_VALUE
         }
     }
 
     fun assertUnary() {
-        assert{ listOf("-", "+", "@", "!", "++", "--").contains(operator) }
+        assert{ listOf("-", "+", "!", "++", "--").contains(operator) }
     }
 
     fun primary(): OperatorToken {

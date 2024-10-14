@@ -85,35 +85,34 @@ See [FizzBuzz example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd33
 ### 4. Buildings and Memory
 Before buildings that are connected to the processor can be used, the developer must declare their existence:
 ```cindusty
-// use @[BUILDING NAME]
-use @message1;
-use @cell1;
-```
-Operator `@` is used to refer to the buildings with the name after the operator.
-The resulting expression returns value of `building` type
+// use [BUILDING NAME]
+use message1;
+use cell1;
 
-```cindustry
-bulding result = @message1;
+void main() {
+    bulding result = message1;
+    print("Hello", result);
+}
 ```
 
 ### 4.1. Control and Sensor
 Cindustry allows developers to get buildings state without `sensor` functions
 and use them directly where they need them.
-The syntax is following: `@buidlingName.fieldName`.
-`@buildingName` can be replaced with the variable that typed as variable, or with a result of a function call.
+The syntax is following: `buidlingName.fieldName`.
+`buildingName` can be replaced with the variable that typed as variable, or with a result of a function call.
 See [Reactor Safety example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd3383b585a4259254561b5c92335e4f/examples/reactor.cind).
 
 ```cindustry
-bool a = @switch1.enabled;
-if (a && @reactor1.totalLiquids < 5)
-    @reactor1.enabled = false;
+bool a = switch1.enabled;
+if (a && reactor1.totalLiquids < 5)
+    reactor1.enabled = false;
 ```
 ### 4.2. Memory
 Cindustry replaced `write` and `read` Mindustry's instruction with array-like syntax: 
 ```cindustry
-number a = @cell1[0];
-number b = @cell1[index];
-@cell1[index] = c;
+number a = cell1[0];
+number b = cell1[index];
+cell1[index] = c;
 ```
 ### 5. Function calls
 Cindustry has typical for C-like languages function call syntax:
@@ -125,10 +124,10 @@ outer(inner(param1), param2);
 
 Standard functions are functions that are available to the developer in everywhere in the code. Those include:
 - `print(value)` — puts `value` into print buffer
-- `printFlush(@building)` — flushes print buffer into `@buidling`
-- `print(value, @buidling)` — puts `value` into print buffer and immediately flushes it into `@building`
-- `read(@building, index)` — corresponds to `@building[index]`
-- `write(value, @building, index)` — corresponds to `@building[index] = value`
+- `printFlush(building)` — flushes print buffer into `buidling`
+- `print(value, buidling)` — puts `value` into print buffer and immediately flushes it into `building`
+- `read(building, index)` — corresponds to `building[index]`
+- `write(value, building, index)` — corresponds to `building[index] = value`
 - `getLink(number)` — returns `building` typed value, gets processor link
 - `wait(number)` — waits `number` seconds
 - `stop()` — stops the program
