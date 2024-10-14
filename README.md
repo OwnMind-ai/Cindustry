@@ -85,9 +85,9 @@ See [FizzBuzz example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd33
 ### 4. Buildings and Memory
 Before buildings that are connected to the processor can be used, the developer must declare their existence:
 ```cindusty
-// use [BUILDING NAME]
+// use <building name> [as <another name>]
 use message1;
-use cell1;
+use cell1 as memory;
 
 void main() {
     bulding result = message1;

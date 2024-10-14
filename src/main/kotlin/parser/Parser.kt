@@ -21,10 +21,19 @@ class Parser(private val lexer: Lexer) {
                     val name = lexer.strictNext<WordToken>("Invalid building name")
                     name.assertNotKeyword()
 
+                    if((lexer.peek() as? WordToken)?.word == "as"){
+                        lexer.next()
+                        val alias = lexer.strictNext<WordToken>("Invalid building name")
+
+                        //TODO can be optimized: treat as '#DEFINE <alias> <name>'
+                        file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
+                        file.globalVariables.add(InitializationToken(WordToken("building"), alias, VariableToken(name)))
+                    } else {
+                        file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
+                    }
+
                     lexer.strictNext<PunctuationToken>("Semicolon expected")
                         .also { it.assert { i -> i.character == ";" } }
-
-                    file.globalVariables.add(InitializationToken(WordToken("building"), name, BuildingToken(name.word)))
                 }
                 "global" -> {
                     lexer.next()
