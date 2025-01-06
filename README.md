@@ -80,7 +80,7 @@ void main(){
 Modern languages don't use jumps and gotos for a reason.
 Cindustry features C-style loops, such as while, do-while and for, as well as if and if-else statements.
 In addition to them, Cindustry also has break and continue statements.
-See [FizzBuzz example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd3383b585a4259254561b5c92335e4f/examples/fizzbuzz.cind).
+See [FizzBuzz example](https://github.com/OwnMind-ai/Cindustry/blob/main/examples/fibonacci.cind).
 
 ### 4. Buildings and Memory
 Before buildings that are connected to the processor can be used, the developer must declare their existence:
@@ -100,7 +100,7 @@ Cindustry allows developers to get buildings state without `sensor` functions
 and use them directly where they need them.
 The syntax is following: `buidlingName.fieldName`.
 `buildingName` can be replaced with the variable that typed as variable, or with a result of a function call.
-See [Reactor Safety example](https://github.com/OwnMind-ai/Cindustry/blob/fdb67966dd3383b585a4259254561b5c92335e4f/examples/reactor.cind).
+See [Reactor Safety example](https://github.com/OwnMind-ai/Cindustry/blob/main/examples/reactor.cind).
 
 ```cindustry
 bool a = switch1.enabled;
