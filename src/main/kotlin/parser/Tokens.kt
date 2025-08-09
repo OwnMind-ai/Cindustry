@@ -11,6 +11,17 @@ abstract class Token{
     var file: String? = null
 
     open fun computeErrorData(){}
+    protected abstract fun createClone(): Token;
+
+    fun clone(): Token{
+        val clone = createClone();
+        clone.lineNumber = lineNumber;
+        clone.columnNumber = columnNumber;
+        clone.line = line;
+        clone.tokenLength = tokenLength;
+        clone.file = file;
+        return clone;
+    }
 }
 
 fun <T : Token> T.assert(message: String = "Invalid token", predicate: (T) -> Boolean){
@@ -65,6 +76,8 @@ internal class DummyToken() : Token() {
     constructor(stream: CharStream) : this() {
         loadData(stream)
     }
+
+    override fun createClone(): Token = DummyToken()
 }
 
 // LEXER LEVEL
@@ -80,15 +93,21 @@ data class WordToken(
     fun assertNotKeyword() {
         assert("Symbol must not be a keyword") { !TYPES.contains(word) && !KEYWORDS.contains(word) }
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class StringToken(
     var content: String
-) : ExpressionToken()
+) : ExpressionToken() {
+    override fun createClone(): Token = this.copy()
+}
 
 data class PunctuationToken(
     var character: String
-) : Token()
+) : Token(){
+    override fun createClone(): Token = this.copy()
+}
 
 data class OperatorToken(
     var operator: String
@@ -128,19 +147,27 @@ data class OperatorToken(
             else -> operator
         })
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class NumberToken(
     var number: String
-) : ExpressionToken()
+) : ExpressionToken(){
+    override fun createClone(): Token = this.copy()
+}
 
 data class BooleanToken(
     var value: Boolean
-) : ExpressionToken()
+) : ExpressionToken(){
+    override fun createClone(): Token = this.copy()
+}
 
 data class BuildingToken(
     var name: String
-) : ExpressionToken()
+) : ExpressionToken(){
+    override fun createClone(): Token = this.copy()
+}
 
 // PARSER LEVEL
 
@@ -154,7 +181,9 @@ interface AssignableToken
 
 data class CodeBlockToken(
     var statements: List<ExecutableToken>
-) : Token()
+) : Token(){
+    override fun createClone(): Token = this.copy()
+}
 
 data class InitializationToken(
     var type: WordToken,
@@ -166,6 +195,8 @@ data class InitializationToken(
         name.computeErrorData()
         file(name.file!!).lineNumber(name.lineNumber!!).line(name.line!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class OperationToken(
@@ -177,6 +208,8 @@ data class OperationToken(
         override fun toString(): String {
             return "EMPTY SIDE"
         }
+
+        override fun createClone(): Token = this;
     }
 
     fun isFlat(): Boolean{
@@ -195,6 +228,8 @@ data class OperationToken(
         else
             loadData(left).tokenLength(right.tokenLength!! + right.columnNumber!! - left.columnNumber!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class ArrayAccessToken(
@@ -206,6 +241,8 @@ data class ArrayAccessToken(
         index.computeErrorData()
         loadData(array).tokenLength(index.tokenLength!! + index.columnNumber!! - array.columnNumber!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class FieldAccessToken(
@@ -217,6 +254,8 @@ data class FieldAccessToken(
         from.computeErrorData()
         loadData(from).tokenLength(field.tokenLength!! + field.columnNumber!! - from.columnNumber!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class CallToken(
@@ -231,6 +270,8 @@ data class CallToken(
             tokenLength(it.columnNumber!! - name.columnNumber!! + it.tokenLength!! + 1)
         }
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 interface NamedToken : AssignableToken{
@@ -248,6 +289,8 @@ data class VariableToken(
         name.computeErrorData()
         loadData(name)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class IfToken(
@@ -258,6 +301,8 @@ data class IfToken(
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return doBlock.statements + (elseBlock?.statements ?: listOf())
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class WhileToken(
@@ -268,6 +313,8 @@ data class WhileToken(
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return doBlock.statements + condition
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class ForToken(
@@ -284,6 +331,8 @@ data class ForToken(
 
         return result
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class ReturnToken(
@@ -304,6 +353,8 @@ data class ReturnToken(
             tokenLength(value?.tokenLength!! + value?.columnNumber!! - type.columnNumber!!)
         }
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class ParameterToken(
@@ -316,6 +367,8 @@ data class ParameterToken(
         name.computeErrorData()
         loadData(type).tokenLength(name.tokenLength!! + name.columnNumber!! - type.columnNumber!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class FunctionDeclarationToken(
@@ -327,6 +380,8 @@ data class FunctionDeclarationToken(
     override fun getAllExecutableTokens(): List<ExecutableToken> {
         return codeBlock.statements
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class FileToken(
@@ -339,6 +394,8 @@ data class FileToken(
     override fun toString(): String {
         return "FILE($functions)"
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class ImportToken (
@@ -348,6 +405,8 @@ data class ImportToken (
         path.first().computeErrorData()
         file(path.first().file!!).lineNumber(path.first().lineNumber!!).line(path.first().line!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 data class EnumToken (
@@ -358,6 +417,8 @@ data class EnumToken (
         name.computeErrorData()
         file(name.file!!).lineNumber(name.lineNumber!!).line(name.line!!)
     }
+
+    override fun createClone(): Token = this.copy()
 }
 
 fun nextChildToken(t: Token) = when (t) {
@@ -380,4 +441,44 @@ fun <T> executeDeep(token: T, next: (T) -> List<T>, execute: (T) -> Unit){
     if (list.isEmpty()) return
 
     list.forEach { executeDeep(it, next, execute) }
+}
+
+fun <T : Token> T.deepCopy(): T {
+    val t = this.clone()
+
+    when (t) {
+        is OperationToken -> {
+            t.left = t.left.deepCopy()
+            t.right = t.right.deepCopy()
+            t.operator = t.operator.copy()
+        }
+        is CallToken -> t.parameters = t.parameters.map { it.deepCopy() }
+        is ArrayAccessToken -> {
+            t.array = t.array.deepCopy()
+            t.index = t.index.deepCopy()
+        }
+        is FieldAccessToken -> t.from = t.from.deepCopy()
+        is WhileToken -> {
+            t.doBlock = t.doBlock.deepCopy()
+            t.condition = t.condition.deepCopy()
+        }
+        is IfToken -> {
+            t.condition = t.condition.deepCopy()
+            t.doBlock = t.doBlock.deepCopy()
+            t.elseBlock = t.elseBlock?.deepCopy()
+        }
+        is ForToken -> {
+            t.doBlock = t.doBlock.deepCopy()
+            t.condition = t.condition?.deepCopy()
+            t.initialization = t.initialization?.deepCopy()
+            t.after = t.after?.deepCopy()
+        }
+        is CodeBlockToken -> t.statements = t.statements.map { it.deepCopy() }
+        is InitializationToken -> t.value = t.value?.deepCopy()
+        is ReturnToken -> t.value = t.value?.deepCopy()
+        is FileToken -> t.functions = t.functions.map { it.deepCopy() }.toMutableList()
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    return t as T;
 }

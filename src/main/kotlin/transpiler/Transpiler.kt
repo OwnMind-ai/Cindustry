@@ -651,8 +651,8 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
         val leftGetter: (OperationToken) -> VariableToken = { (if (it.left is VariableToken) it.left else it.right) as VariableToken }
         val rightGetter: (ExpressionToken) -> VariableToken? = {
-            if (it is VariableToken) it else
-                if (it is OperationToken && it.operator.operator in operations) leftGetter(it)
+            it as? VariableToken
+                ?: if (it is OperationToken && it.operator.operator in operations) leftGetter(it)
                 else null
         }
         return !(left is OperationToken && left.operator.operator in operations
@@ -703,6 +703,8 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
 
     private fun checkVariable(name: String, token: Token, ifFound: (VariableData) -> Unit = { }) {
         ifFound(getVariable(if (name.startsWith("_")) name
+            else if (variableStack.stack.filter { it.scope.functionScope == VariableStack.GLOBAL_SCOPE }
+                .any { it.name() == name}) name
             else VariableData.variableName(getFunctionScope(), name), token))
     }
 
@@ -834,6 +836,8 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
         override fun getName(): String {
             return value.value
         }
+
+        override fun createClone(): Token = this.copy()
     }
 
     private fun NamedToken.getTyped(ignoreInitialization: Boolean = false): TypedExpression{

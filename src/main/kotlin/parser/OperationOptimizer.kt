@@ -16,9 +16,10 @@ object OperationOptimizer {
         3. a + a * 3 -> a * 4 ; a + (a * 3 + 4) -> a * 4 + 4
      */
     fun optimize(token: OperationToken): ExpressionToken {
-        var result: ExpressionToken = token
-        optimizeDuplicates(token) { result = it }
-        optimizeChains(token, null) { result = it }
+        val copy = token.deepCopy();
+        var result: ExpressionToken = copy;
+        optimizeDuplicates(copy) { result = it }
+        optimizeChains(copy, null) { result = it }
 
         return result
     }
