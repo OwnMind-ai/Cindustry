@@ -341,7 +341,6 @@ data class ForEachToken(
     var doBlock: CodeBlockToken
 ) : ExecutableToken(), BlockToken {
     companion object{
-        const val IN = "in"
         const val VARARGS = "varargs"
     }
 

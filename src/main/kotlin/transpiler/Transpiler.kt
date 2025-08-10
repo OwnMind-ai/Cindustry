@@ -172,7 +172,7 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     private fun transpileForEach(token: ForEachToken) {
         val source = when (token.from) {
             ForEachToken.VARARGS -> variableStack.blockStack.last().varargs.toMutableList()
-            else -> TODO()
+            else -> resolveMatchingVariables(token.from)
         }
 
         variableStack.add(token.doBlock, token)
@@ -186,6 +186,13 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             token.doBlock.statements.forEach(this::transpileExecutableToken)
         }
         variableStack.remove(token.doBlock)
+    }
+
+    private fun resolveMatchingVariables(from: String): MutableList<TypedExpression> {
+        val regex = from.toRegex()
+        return variableStack.stack
+            .filter { it.scope.functionScope == VariableStack.GLOBAL_SCOPE && it.actualName.matches(regex) }
+            .map { it.getTyped() }.toMutableList()
     }
 
     private fun transpileReturn(token: ReturnToken) {

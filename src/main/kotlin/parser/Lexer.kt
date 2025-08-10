@@ -51,7 +51,7 @@ class Lexer(private val stream: CharStream) {
         skipUnimportantCharacters()
 
         if (stream.peek(3) == "...") {
-            repeat(3) { stream.next() };
+            repeat(3) { stream.next() }
             return WordToken("...")
         }
 
@@ -104,13 +104,19 @@ class Lexer(private val stream: CharStream) {
         return result
     }
 
-    private fun canParseWord(): Boolean = stream.peek().isLetter()
+    private fun canParseWord(): Boolean = stream.peek().isLetter() || stream.peek() == '`'
 
     private fun parseWord(): WordToken {
         val token = WordToken("").loadData(stream)
 
-        while (stream.peek().isLetter() || stream.peek().isDigit() || stream.peek() == '_')
-            token.word += stream.next().toString()
+        if (stream.peek() == '`'){
+            stream.next()
+            token.word = stream.takeWhile { it != '`' }
+            stream.next()
+        } else {
+            while (stream.peek().isLetter() || stream.peek().isDigit() || stream.peek() == '_')
+                token.word += stream.next().toString()
+        }
 
         return token.tokenLength(token.word.length)
     }
@@ -175,8 +181,7 @@ class Lexer(private val stream: CharStream) {
         while (!stream.ended() && stream.peek(ending.length) != ending)
             stream.next()
 
-        for (i in 1..ending.length)
-            stream.next()
+        repeat(ending.length) { stream.next() }
 
         skipComments()   // Skips sequential comments if exist
     }
