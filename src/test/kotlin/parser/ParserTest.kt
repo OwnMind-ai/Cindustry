@@ -44,7 +44,7 @@ class ParserTest {
                     print(arg);
                 }
                 
-                foreach(arg in `message\d+`){
+                foreach((arg, index, index2) in `message(\d+)`){
                     print(arg);
                 }
             
@@ -107,11 +107,11 @@ class ParserTest {
                     ParameterToken(WordToken(Type.VARARG.name), WordToken(""), true)
                 ),
                 CodeBlockToken(listOf(
-                    ForEachToken("arg", "args", CodeBlockToken(listOf(
+                    ForEachToken("arg", null, "args", CodeBlockToken(listOf(
                         CallToken(WordToken("print"), listOf(VariableToken(WordToken("arg")))
                         ),
                     ))),
-                    ForEachToken("arg", "message\\d+", CodeBlockToken(listOf(
+                    ForEachToken("arg", listOf("index", "index2"), "message(\\d+)", CodeBlockToken(listOf(
                         CallToken(WordToken("print"), listOf(VariableToken(WordToken("arg")))),
                     ))),
                     ReturnToken(WordToken("return"), OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide()))

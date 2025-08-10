@@ -337,6 +337,7 @@ data class ForToken(
 
 data class ForEachToken(
     var variable: String,
+    var groupVars: List<String>?,
     var from: String,
     var doBlock: CodeBlockToken
 ) : ExecutableToken(), BlockToken {

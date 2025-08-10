@@ -1,5 +1,6 @@
 package org.cindustry.transpiler
 
+import org.cindustry.exceptions.ParserException
 import org.cindustry.exceptions.TokenException
 import org.cindustry.parser.*
 import org.cindustry.transpiler.instructions.Instruction
@@ -170,29 +171,46 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
     }
 
     private fun transpileForEach(token: ForEachToken) {
-        val source = when (token.from) {
-            ForEachToken.VARARGS -> variableStack.blockStack.last().varargs.toMutableList()
+        val (source, matches) = when (token.from) {
+            ForEachToken.VARARGS -> {
+                if (token.groupVars != null)
+                    throw ParserException("Only foreach using variable matching allow for group arguments", token)
+
+                variableStack.blockStack.last().varargs to listOf()
+            }
             else -> resolveMatchingVariables(token.from)
         }
 
         variableStack.add(token.doBlock, token)
-        val initialize = InitializationToken(WordToken("any"), WordToken(token.variable), source.removeFirst().toToken());
-        transpileInitialization(initialize);
-        token.doBlock.statements.forEach(this::transpileExecutableToken)
+        transpileInitialization(InitializationToken(WordToken("any"), WordToken(token.variable), null))
+        token.groupVars?.forEach {
+            transpileInitialization(InitializationToken(WordToken("any"), WordToken(it), null))
+        }
 
-        for (arg in source){
+        for ((i, arg) in source.withIndex()){
             val set = OperationToken(OperatorToken("="), VariableToken(WordToken(token.variable)), arg.toToken())
             transpileExpression(set)
+            token.groupVars?.forEachIndexed { index, it ->
+                if (matches[i].groupValues.size - 1 != token.groupVars!!.size)
+                    throw ParserException("Invalid group count", token)
+
+                val set = OperationToken(OperatorToken("="), VariableToken(WordToken(it)), StringToken(matches[i].groupValues[index + 1]))
+                transpileExpression(set)
+            }
+
             token.doBlock.statements.forEach(this::transpileExecutableToken)
         }
         variableStack.remove(token.doBlock)
     }
 
-    private fun resolveMatchingVariables(from: String): MutableList<TypedExpression> {
+    private fun resolveMatchingVariables(from: String): Pair<List<TypedExpression>, List<MatchResult>> {
         val regex = from.toRegex()
         return variableStack.stack
             .filter { it.scope.functionScope == VariableStack.GLOBAL_SCOPE && it.actualName.matches(regex) }
-            .map { it.getTyped() }.toMutableList()
+            .let { l -> Pair(
+                l.map { it.getTyped() }.toMutableList(),
+                l.map { regex.matchEntire(it.actualName)!! }
+            )}
     }
 
     private fun transpileReturn(token: ReturnToken) {

@@ -243,13 +243,25 @@ class Parser(private val lexer: Lexer) {
     private fun parseForeach(): ForEachToken {
         lexer.strictNext<PunctuationToken>().assert { it.character == "(" }
 
-        val variable = lexer.strictNext<WordToken>("Invalid foreach variable name")
+        val variable: String
+        var groups: List<String>? = null
+        if (lexer.peek() is PunctuationToken){
+            val args = delimiter("(", ",", ")", parser = { lexer.strictNext<WordToken>() })
+            if (args.isEmpty())
+                throw ParserException("Invalid foreach statement")
+
+            variable = args.first().word
+            groups = args.subList(1, args.size).map { it.word }
+        } else {
+            variable = lexer.strictNext<WordToken>("Invalid foreach variable name").word
+        }
+
         lexer.strictNext<WordToken>().assert { it.word == "in" }
         val from = lexer.strictNext<WordToken>("Invalid foreach source")
 
         lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
 
-        return ForEachToken(variable.word, from.word, parseBody())
+        return ForEachToken(variable, groups, from.word, parseBody())
     }
 
     private fun parseArrayAccess(token: ExpressionToken): ArrayAccessToken {
