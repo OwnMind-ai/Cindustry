@@ -1,7 +1,11 @@
 package org.cindustry.transpiler
 
+import org.cindustry.exceptions.TokenException
 import org.cindustry.exceptions.TranspileException
+import org.cindustry.parser.CharStream
 import org.cindustry.parser.FunctionDeclarationToken
+import org.cindustry.parser.Lexer
+import org.cindustry.parser.Parser
 import org.cindustry.transpiler.instructions.InstructionManager
 import java.util.*
 
@@ -16,8 +20,16 @@ class FunctionRegistry(instructionManager: InstructionManager, private val objec
 
     init {
         registry.addAll(createStandardRegistry(instructionManager, objectsRegistry))
+        parseInternalModule(STANDARD_EXTENSION)
+
         standardModules["math"] = createMathModule(instructionManager)
         standardModules["draw"] = createDrawModule(instructionManager)
+    }
+
+    private fun parseInternalModule(code: String) {
+        val file = Parser(Lexer(CharStream(code, "<standard>"))).parse("<standard>")
+
+        file.functions.forEach { add(it, "<standard>") }
     }
 
     fun add(function: FunctionDeclarationToken, packageName: String = "main"){
@@ -331,3 +343,20 @@ private fun createMathModule(instructionManager: InstructionManager): List<Funct
 
     return result
 }
+
+private val STANDARD_EXTENSION = """
+    void printf(string text, ...){
+        println(text);
+        foreach(arg in varargs){
+            format(arg);
+        }
+    }
+
+    void printf(string text, building to, ...){
+        println(text);
+        foreach(arg in varargs){
+            format(arg);
+        }
+        printFlush(to);
+    }
+""".trimIndent()
