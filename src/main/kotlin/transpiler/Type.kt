@@ -60,6 +60,7 @@ open class Type(val name: String, private val value: String? = null){
     data object CONTENT : Type("CONTENT")
     data object UNIT : Type("UNIT")
     data object ENUM : Type("ENUM")
+    data object VARARG : Type("VARARG")
 
     companion object {
         const val ENUM_NAME: String = "ENUM_VALUE"
@@ -69,7 +70,7 @@ open class Type(val name: String, private val value: String? = null){
         }
 
         fun values(): Array<Type> {
-            return arrayOf(NUMBER, VOID, STRING, BUILDING, ANY, BOOL, CONTENT, UNIT, ENUM)
+            return arrayOf(NUMBER, VOID, STRING, BUILDING, ANY, BOOL, CONTENT, UNIT, VARARG)
         }
 
         @Deprecated("")
@@ -84,6 +85,7 @@ open class Type(val name: String, private val value: String? = null){
                 "CONTENT" -> CONTENT
                 "UNIT" -> UNIT
                 "ENUM" -> ENUM
+                "VARARG" -> VARARG
                 else -> throw IllegalArgumentException("No object org.cindustry.transpiler.Types.$value")
             }
         }

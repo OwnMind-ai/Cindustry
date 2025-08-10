@@ -50,6 +50,11 @@ class Lexer(private val stream: CharStream) {
     private fun parseToken(): Token{
         skipUnimportantCharacters()
 
+        if (stream.peek(3) == "...") {
+            repeat(3) { stream.next() };
+            return WordToken("...")
+        }
+
         if (this.canParseNumber())
             return this.parseNumber()
 

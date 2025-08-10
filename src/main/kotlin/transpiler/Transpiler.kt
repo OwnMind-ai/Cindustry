@@ -164,8 +164,28 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             is ForToken -> transpileFor(token)
             is IfToken -> transpileIf(token)
             is ReturnToken -> transpileReturn(token)
+            is ForEachToken -> transpileForEach(token)
             else -> throw IllegalArgumentException()
         }
+    }
+
+    private fun transpileForEach(token: ForEachToken) {
+        val source = when (token.from) {
+            ForEachToken.VARARGS -> variableStack.blockStack.last().varargs.toMutableList()
+            else -> TODO()
+        }
+
+        variableStack.add(token.doBlock, token)
+        val initialize = InitializationToken(WordToken("any"), WordToken(token.variable), source.removeFirst().toToken());
+        transpileInitialization(initialize);
+        token.doBlock.statements.forEach(this::transpileExecutableToken)
+
+        for (arg in source){
+            val set = OperationToken(OperatorToken("="), VariableToken(WordToken(token.variable)), arg.toToken())
+            transpileExpression(set)
+            token.doBlock.statements.forEach(this::transpileExecutableToken)
+        }
+        variableStack.remove(token.doBlock)
     }
 
     private fun transpileReturn(token: ReturnToken) {
@@ -314,8 +334,12 @@ class Transpiler(private val fileToken: FileToken, private val directory: File) 
             variableStack.add(function.token!!.codeBlock, function.token)
 
             // TODO optimize for constants
-            parameters.forEachIndexed { i, param ->
+            for ((i, param) in parameters.withIndex()) {
                 val parameter = function.token.parameters[i]
+                if (parameter.type.word == Type.VARARG.name){
+                    variableStack.blockStack.last().varargs.addAll(parameters.takeLast(parameters.size - i))
+                    break
+                }
                 val initialization = InitializationToken(parameter.type, parameter.name, param.toToken(), parameter.const ?: false)
                 transpileInitialization(initialization)
             }

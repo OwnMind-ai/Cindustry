@@ -86,8 +86,8 @@ data class WordToken(
     var word: String
 ) : Token() {
     companion object{
-        val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void")
-        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as", "import")
+        val TYPES = listOf("number", "string", "content", "bool", "building", "any", "void", "vararg")
+        val KEYWORDS = listOf("use", "if", "while", "for", "return", "break", "continue", "global", "const", "as", "import", "foreach", "in", "...")
     }
 
     fun assertNotKeyword() {
@@ -335,6 +335,20 @@ data class ForToken(
     override fun createClone(): Token = this.copy()
 }
 
+data class ForEachToken(
+    var variable: String,
+    var from: String,
+    var doBlock: CodeBlockToken
+) : ExecutableToken(), BlockToken {
+    companion object{
+        const val IN = "in"
+        const val VARARGS = "varargs"
+    }
+
+    override fun createClone(): Token = this.copy()
+    override fun getAllExecutableTokens(): List<ExecutableToken> = doBlock.statements;
+}
+
 data class ReturnToken(
     var type: WordToken,
     var value: ExpressionToken?
@@ -473,6 +487,7 @@ fun <T : Token> T.deepCopy(): T {
             t.initialization = t.initialization?.deepCopy()
             t.after = t.after?.deepCopy()
         }
+        is ForEachToken -> t.doBlock = t.doBlock.deepCopy()
         is CodeBlockToken -> t.statements = t.statements.map { it.deepCopy() }
         is InitializationToken -> t.value = t.value?.deepCopy()
         is ReturnToken -> t.value = t.value?.deepCopy()

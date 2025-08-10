@@ -51,9 +51,16 @@ data class FunctionData(
         if (token == null && transpilationFunction == null) throw IllegalStateException()
     }
 
-    fun isCallable(parameters: List<Type>): Boolean{
-        return parameters.size == parameterStructure.size && parameters.withIndex()
-            .all { it.value.compatible(parameterStructure[it.index]) }
+    fun isCallable(parameters: List<Type>): Boolean {
+        for ((i, inputParameter) in parameters.withIndex()){
+            val parameter = parameterStructure.getOrNull(i)
+
+            if (parameter == null) return false
+            if (parameter == Type.VARARG) return true
+            if (!inputParameter.compatible(parameter)) return false
+        }
+
+        return true
     }
 }
 
@@ -89,6 +96,24 @@ private fun createStandardRegistry(instructionManager: InstructionManager, objec
 
     standard.add(FunctionData("print", listOf(Type.ANY, Type.BUILDING), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
         instructionManager.writeInstruction("print #", params[0])
+        instructionManager.writeInstruction("printflush #", params[1])
+        null
+    })
+
+    standard.add(FunctionData("format", listOf(Type.ANY), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("format #", params[0])
+        null
+    })
+
+    standard.add(FunctionData("println", listOf(Type.ANY), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("print #", params[0])
+        instructionManager.writeInstruction("print \"\\n\"")
+        null
+    })
+
+    standard.add(FunctionData("println", listOf(Type.ANY, Type.BUILDING), Type.VOID, FunctionRegistry.STANDARD_PACKAGE) { params, _ ->
+        instructionManager.writeInstruction("print #", params[0])
+        instructionManager.writeInstruction("print \"\\n\"")
         instructionManager.writeInstruction("printflush #", params[1])
         null
     })

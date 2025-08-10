@@ -12,13 +12,15 @@ class VariableStack {
     val returnStack: MutableMap<TypedExpression, Scope> = HashMap()
 
     init {
-        blockStack.add(Scope(null, null, 0, 0, GLOBAL_SCOPE))  // File scope
+        blockStack.add(Scope(null, null, 0, 0, GLOBAL_SCOPE, ArrayList()))  // File scope
     }
 
     fun add(block: CodeBlockToken, parent: BlockToken){
         val last = blockStack.last()
         blockStack.add(Scope(block, parent, last.id + 1, 0,
-            if (parent is FunctionDeclarationToken) parent.name.word else last.functionScope))
+            if (parent is FunctionDeclarationToken) parent.name.word else last.functionScope,
+            if (parent is FunctionDeclarationToken) ArrayList() else blockStack.last().varargs
+        ))
     }
 
     fun requestBufferVariable(): String {
@@ -74,7 +76,8 @@ data class Scope(
     val parentToken: BlockToken?,
     val id: Int,
     var bufferCount: Int,
-    val functionScope: String
+    val functionScope: String,
+    val varargs: ArrayList<TypedExpression>
 )
 
 /*

@@ -1,6 +1,7 @@
 package org.cindustry.parser
 
 import org.cindustry.exceptions.ParserException
+import org.cindustry.transpiler.Type
 
 class Parser(private val lexer: Lexer) {
     fun parse(fileName: String): FileToken{
@@ -79,6 +80,14 @@ class Parser(private val lexer: Lexer) {
         val name = lexer.strictNext<WordToken>("Invalid name")
         val parameters = parseParameters()
         val code = parseCodeBlock()
+
+        parameters.filter { it.type.word == "vararg" }.let { found ->
+            if (found.isEmpty()) return@let
+            if (found.size > 1)
+                throw ParserException("Only one vararg can be defined", found.last())
+            if (parameters.indexOf(found.first()) != parameters.size - 1)
+                throw ParserException("vararg must be the last parameter", found.first())
+        }
 
         evaluateParametersMutability(parameters, code)
 
@@ -223,6 +232,7 @@ class Parser(private val lexer: Lexer) {
         if (current.word == "while") return parseWhile().loadData(current)
         if (current.word == "do") return parseDoWhile().loadData(current)
         if (current.word == "if") return parseIf().loadData(current)
+        if (current.word == "foreach") return parseForeach().loadData(current)
 
         if (lexer.peek() is PunctuationToken && (lexer.peek() as PunctuationToken).character == "(")
             return this.parseCall(current)
@@ -230,10 +240,22 @@ class Parser(private val lexer: Lexer) {
         return VariableToken(current)
     }
 
+    private fun parseForeach(): ForEachToken {
+        lexer.strictNext<PunctuationToken>().assert { it.character == "(" }
+
+        val variable = lexer.strictNext<WordToken>("Invalid foreach variable name")
+        lexer.strictNext<WordToken>().assert { it.word == "in" }
+        val from = lexer.strictNext<WordToken>("Invalid foreach source")
+
+        lexer.strictNext<PunctuationToken>().assert { it.character == ")" }
+
+        return ForEachToken(variable.word, from.word, parseBody())
+    }
+
     private fun parseArrayAccess(token: ExpressionToken): ArrayAccessToken {
         lexer.strictNext<PunctuationToken>().assert { it.character == "[" }
         val expression = this.parseExpression()
-        val index = if (expression is ExpressionToken) expression else throw ParserException("Invalid array index", expression)
+        val index = expression as? ExpressionToken ?: throw ParserException("Invalid array index", expression)
         lexer.strictNext<PunctuationToken>().assert { it.character == "]" }
 
         return ArrayAccessToken(token, index)
@@ -338,6 +360,9 @@ class Parser(private val lexer: Lexer) {
         if(const) lexer.next()
 
         val type = lexer.strictNext<WordToken>()
+        if (type.word == "...")
+            return ParameterToken(WordToken(Type.VARARG.name), WordToken(""))
+
         type.assert { type.word !in WordToken.KEYWORDS }
 
         val name = lexer.strictNext<WordToken>()

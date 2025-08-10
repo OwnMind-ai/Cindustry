@@ -1,6 +1,7 @@
 package parser
 
 import org.cindustry.parser.*
+import org.cindustry.transpiler.Type
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -38,7 +39,11 @@ class ParserTest {
                 }
             }
             
-            Enum foo(const number a, number b, number c){
+            Enum foo(const number a, number b, number c, ...){
+                foreach(arg in args){
+                    print(arg);
+                }
+            
                 return b++; 
             }
         """.trimIndent()
@@ -94,9 +99,14 @@ class ParserTest {
                 listOf(
                     ParameterToken(WordToken("number"), WordToken("a"), true),
                     ParameterToken(WordToken("number"), WordToken("b"), false),
-                    ParameterToken(WordToken("number"), WordToken("c"), true)
+                    ParameterToken(WordToken("number"), WordToken("c"), true),
+                    ParameterToken(WordToken(Type.VARARG.name), WordToken(""), true)
                 ),
                 CodeBlockToken(listOf(
+                    ForEachToken("arg", "args", CodeBlockToken(listOf(
+                        CallToken(WordToken("print"), listOf(VariableToken(WordToken("arg")))
+                        ),
+                    ))),
                     ReturnToken(WordToken("return"), OperationToken(OperatorToken("++"), VariableToken(WordToken("b")), OperationToken.EmptySide()))
                 )))
         )).toString(), parser.parse("test").toString())
